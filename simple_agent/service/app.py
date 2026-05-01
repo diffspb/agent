@@ -16,9 +16,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.repository = Repository(database)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+        allow_origin_regex=app_settings.cors_allow_origin_regex,
         allow_credentials=False,
-        allow_methods=["GET"],
+        allow_methods=["*"],
         allow_headers=["*"],
     )
 

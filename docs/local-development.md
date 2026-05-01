@@ -93,3 +93,9 @@ make frontend-build
 ```
 
 Frontend будет доступен на `http://127.0.0.1:5173`.
+
+Backend по умолчанию разрешает CORS для локальных frontend-origin вида `http://127.0.0.1:<порт>` и `http://localhost:<порт>`. Если нужно переопределить правило, используйте:
+
+```bash
+export SIMPLE_AGENT_CORS_ALLOW_ORIGIN_REGEX='^http://127\.0\.0\.1:5173$'
+```
