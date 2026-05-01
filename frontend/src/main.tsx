@@ -35,6 +35,24 @@ type Run = {
   summary: string | null;
 };
 
+type TaskCandidate = {
+  id: number;
+  tick_id: number;
+  external_task_id: string;
+  status: string;
+  assignee_email: string | null;
+  priority: number | null;
+  dependencies_state: string;
+  decision: string;
+  reason: string | null;
+};
+
+type TickRunResult = {
+  tick: AgentTick;
+  selected_run: Run | null;
+  candidates: TaskCandidate[];
+};
+
 type Stats = {
   ticks_total: number;
   task_candidates_total: number;
@@ -49,6 +67,12 @@ function App() {
   const [ticks, setTicks] = useState<Loadable<AgentTick[]>>({ status: "loading" });
   const [runs, setRuns] = useState<Loadable<Run[]>>({ status: "loading" });
   const [stats, setStats] = useState<Loadable<Stats>>({ status: "loading" });
+  const [candidates, setCandidates] = useState<Loadable<TaskCandidate[]>>({
+    status: "loading",
+  });
+  const [tickAction, setTickAction] = useState<
+    { status: "idle" } | { status: "running" } | { status: "error"; message: string }
+  >({ status: "idle" });
 
   async function loadHealth() {
     setHealth({ status: "loading" });
@@ -77,6 +101,7 @@ function App() {
     setTicks({ status: "loading" });
     setRuns({ status: "loading" });
     setStats({ status: "loading" });
+    setCandidates({ status: "loading" });
 
     const load = async <T,>(path: string): Promise<T> => {
       const response = await fetch(`${API_BASE_URL}${path}`);
@@ -95,11 +120,43 @@ function App() {
       setTicks({ status: "ok", data: ticksPayload });
       setRuns({ status: "ok", data: runsPayload });
       setStats({ status: "ok", data: statsPayload });
+      if (ticksPayload.length > 0) {
+        const candidatesPayload = await load<TaskCandidate[]>(
+          `/api/ticks/${ticksPayload[0].id}/candidates`,
+        );
+        setCandidates({ status: "ok", data: candidatesPayload });
+      } else {
+        setCandidates({ status: "ok", data: [] });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       setTicks({ status: "error", message });
       setRuns({ status: "error", message });
       setStats({ status: "error", message });
+      setCandidates({ status: "error", message });
+    }
+  }
+
+  async function runTick() {
+    setTickAction({ status: "running" });
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/agent/tick`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: "frontend" }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = (await response.json()) as TickRunResult;
+      setCandidates({ status: "ok", data: payload.candidates });
+      setTickAction({ status: "idle" });
+      await loadDashboard();
+    } catch (error) {
+      setTickAction({
+        status: "error",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
     }
   }
 
@@ -119,10 +176,20 @@ function App() {
           <h1>Simple Agent</h1>
           <p>Проверка REST API для MVP агента.</p>
         </div>
-        <button type="button" onClick={refreshAll}>
-          Обновить
-        </button>
+        <div className="toolbar-actions">
+          <button type="button" onClick={runTick} disabled={tickAction.status === "running"}>
+            {tickAction.status === "running" ? "Запуск..." : "Запустить tick"}
+          </button>
+          <button type="button" onClick={refreshAll}>
+            Обновить
+          </button>
+        </div>
       </section>
+      {tickAction.status === "error" && (
+        <section className="panel compact-panel">
+          <p className="status-error">Ошибка запуска tick: {tickAction.message}</p>
+        </section>
+      )}
 
       <section className="panel compact-panel">
         <h2>Backend Healthcheck</h2>
@@ -276,6 +343,45 @@ function App() {
             </div>
           ) : (
             <p className="muted">Запусков пока нет.</p>
+          ))}
+      </section>
+
+      <section className="panel">
+        <h2>Кандидаты последнего tick</h2>
+        {candidates.status === "loading" && <p className="muted">Загрузка...</p>}
+        {candidates.status === "error" && (
+          <p className="status-error">Ошибка: {candidates.message}</p>
+        )}
+        {candidates.status === "ok" &&
+          (candidates.data.length > 0 ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Задача</th>
+                    <th>Статус</th>
+                    <th>Решение</th>
+                    <th>Причина</th>
+                    <th>Приоритет</th>
+                    <th>Зависимости</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {candidates.data.map((candidate) => (
+                    <tr key={candidate.id}>
+                      <td>{candidate.external_task_id}</td>
+                      <td>{candidate.status}</td>
+                      <td>{candidate.decision}</td>
+                      <td>{candidate.reason ?? "-"}</td>
+                      <td>{candidate.priority ?? "-"}</td>
+                      <td>{candidate.dependencies_state}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted">Кандидатов пока нет.</p>
           ))}
       </section>
     </main>

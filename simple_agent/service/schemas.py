@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Any
 
+from simple_agent.agent import TaskSelectionResult
 from simple_agent.storage.models import (
     AgentTickRecord,
     EventRecord,
@@ -81,4 +82,17 @@ def stats_to_response(stats: StatsRecord) -> dict[str, Any]:
         "runs_by_status": stats.runs_by_status,
         "events_total": stats.events_total,
         "tool_calls_total": stats.tool_calls_total,
+    }
+
+
+def task_selection_result_to_response(result: TaskSelectionResult) -> dict[str, Any]:
+    return {
+        "tick": tick_to_response(result.tick),
+        "selected_run": (
+            run_to_response(result.selected_run) if result.selected_run is not None else None
+        ),
+        "selected_task": result.selected_task,
+        "candidates": [
+            task_candidate_to_response(candidate) for candidate in result.candidates
+        ],
     }

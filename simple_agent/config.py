@@ -9,6 +9,9 @@ class Settings:
     environment: str = "local"
     database_path: Path = Path(".data/simple-agent.sqlite3")
     cors_allow_origin_regex: str = r"^http://(127\.0\.0\.1|localhost):[0-9]+$"
+    agent_email: str = "agent@example.com"
+    task_tracker_mcp_url: str = "http://127.0.0.1:8020/mcp"
+    task_tracker_mcp_timeout_seconds: float = 30.0
 
 
 def load_settings() -> Settings:
@@ -19,5 +22,13 @@ def load_settings() -> Settings:
         cors_allow_origin_regex=os.getenv(
             "SIMPLE_AGENT_CORS_ALLOW_ORIGIN_REGEX",
             r"^http://(127\.0\.0\.1|localhost):[0-9]+$",
+        ),
+        agent_email=os.getenv("AGENT_EMAIL", "agent@example.com"),
+        task_tracker_mcp_url=os.getenv(
+            "TASK_TRACKER_MCP_URL",
+            "http://127.0.0.1:8020/mcp",
+        ),
+        task_tracker_mcp_timeout_seconds=float(
+            os.getenv("TASK_TRACKER_MCP_TIMEOUT_SECONDS", "30.0")
         ),
     )

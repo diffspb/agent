@@ -109,6 +109,8 @@ cancelled
 
 Доступ к таск-трекеру должен идти через адаптер, а не напрямую из runtime. Адаптер скрывает специфичные для трекера имена MCP-инструментов и формы данных за стабильным интерфейсом проекта.
 
+В этапе 3 прямой MCP-клиент используется только bootstrap-сервисом выбора задачи. Целевой runtime должен получать MCP-возможности через общий реестр инструментов, чтобы агент мог работать с разными MCP-трекерами без жесткой привязки к конкретным именам tools. Переход зафиксирован в `TD-014`.
+
 Минимальный интерфейс:
 
 ```python
@@ -427,6 +429,7 @@ class AgentController:
 ```text
 simple_agent/
   agent/
+    task_selection.py
     runtime.py
     controller.py
     state_machine.py
@@ -447,8 +450,8 @@ simple_agent/
     task_tracker.py
 
   tracker/
-    base.py
-    mcp_tracker.py
+    client.py
+    mcp_client.py
 
   workspace/
     manager.py
@@ -461,6 +464,7 @@ simple_agent/
   service/
     app.py
     asgi.py
+    routes_agent.py
     routes_ticks.py
     routes_runs.py
     routes_stats.py
