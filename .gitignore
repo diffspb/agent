@@ -6,6 +6,7 @@ __pycache__/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+.data/
 dist/
 build/
 *.egg-info/
@@ -14,4 +15,3 @@ frontend/dist/
 frontend/.vite/
 .env
 .DS_Store
-

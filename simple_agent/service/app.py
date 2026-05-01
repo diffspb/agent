@@ -2,11 +2,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from simple_agent.config import Settings, load_settings
+from simple_agent.service.routes_runs import router as runs_router
+from simple_agent.service.routes_stats import router as stats_router
+from simple_agent.service.routes_tasks import router as tasks_router
+from simple_agent.storage import Repository, SqliteDatabase
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     app_settings = settings or load_settings()
     app = FastAPI(title=app_settings.app_name)
+    database = SqliteDatabase(app_settings.database_path)
+    database.initialize()
+    app.state.repository = Repository(database)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
@@ -22,6 +29,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "app": app_settings.app_name,
             "environment": app_settings.environment,
         }
+
+    app.include_router(tasks_router)
+    app.include_router(runs_router)
+    app.include_router(stats_router)
 
     return app
 
