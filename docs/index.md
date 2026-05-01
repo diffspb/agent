@@ -11,6 +11,7 @@
 - [Локальный запуск](local-development.md): установка зависимостей, запуск backend, тестов и frontend без Docker.
 - [Хранилище сервиса](storage.md): SQLite-схема, repository layer и endpoints наблюдаемости.
 - [MCP-эмулятор таск-трекера](mcp-task-tracker-emulator.md): модель задач, workflow, JSON-состояние и MCP API примитивного трекера.
+- [Выбор задачи агентом](task-selection.md): правила tick, фильтрации, приоритета, зависимостей и observability.
 - [Индекс ADR](adr/README.md): архитектурные решения.
 
 ## Планирование
