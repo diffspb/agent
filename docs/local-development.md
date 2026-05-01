@@ -65,6 +65,35 @@ curl --noproxy "*" http://127.0.0.1:8010/api/stats
 ```
 
 В WSL или окружениях с proxy важно обходить proxy для локальных адресов. Для `curl` используйте `--noproxy "*"`.
+Для Python MCP-клиента используйте `NO_PROXY="*" no_proxy="*"` или точечный `NO_PROXY=127.0.0.1,localhost`.
+
+## MCP-Эмулятор Таск-Трекера
+
+Запустить эмулятор с простым seed-сценарием:
+
+```bash
+make run-task-tracker
+```
+
+По умолчанию эмулятор использует:
+
+```text
+state: seeds/task_tracker/simple-task.json
+snapshot: .data/task-tracker-snapshot.json
+endpoint: http://127.0.0.1:8020/mcp
+```
+
+Запустить другой сценарий:
+
+```bash
+make run-task-tracker MCP_STATE_FILE=seeds/task_tracker/blocked-task.json
+```
+
+Сбросить snapshot:
+
+```bash
+make reset-task-tracker
+```
 
 ## Тесты
 

@@ -63,6 +63,8 @@
 
 ## Этап 2. MCP-Эмулятор Таск-Трекера
 
+Статус: Реализован в ветке `stage-2-mcp-task-tracker-emulator`.
+
 Результат: локально запускается MCP-эмулятор таск-трекера одного проекта.
 
 Работы:
@@ -84,12 +86,12 @@
   - мета-информация как пары ключ-значение.
 - Поддержать workflow `Todo`, `Open`, `InProgress`, `InReview`, `NeedsInfo`, `Done`, `Cancelled` с любыми переходами.
 - Поддержать MCP-инструменты:
-  - `workflow.get`;
-  - `tasks.get`;
-  - `tasks.list`;
-  - `tasks.update`;
-  - `comments.add`;
-  - `comments.list`.
+  - `workflow_get`;
+  - `tasks_get`;
+  - `tasks_list`;
+  - `tasks_update`;
+  - `comments_add`;
+  - `comments_list`.
 - Добавить seed JSON-файлы для локальных сценариев.
 
 Проверка:

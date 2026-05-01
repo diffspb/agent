@@ -1,0 +1,43 @@
+{
+  "project_key": "PROJECT",
+  "tasks": [
+    {
+      "id": "PROJECT-20",
+      "type": "task",
+      "status": "InProgress",
+      "title": "Подготовить API",
+      "author_email": "author@example.com",
+      "assignee_email": "backend@example.com",
+      "description": "Подготовить API, от которого зависит задача агента.",
+      "links": [
+        {
+          "type": "blocks",
+          "target": "PROJECT-21"
+        }
+      ],
+      "comments": [],
+      "metadata": {
+        "priority": "high"
+      }
+    },
+    {
+      "id": "PROJECT-21",
+      "type": "task",
+      "status": "Open",
+      "title": "Подключить агентский клиент",
+      "author_email": "author@example.com",
+      "assignee_email": "agent@example.com",
+      "description": "Задача заблокирована подготовкой API.",
+      "links": [
+        {
+          "type": "blocked_by",
+          "target": "PROJECT-20"
+        }
+      ],
+      "comments": [],
+      "metadata": {
+        "priority": "normal"
+      }
+    }
+  ]
+}
