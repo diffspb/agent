@@ -1,0 +1,20 @@
+{
+  "project_key": "PROJECT",
+  "tasks": [
+    {
+      "id": "PROJECT-1",
+      "type": "task",
+      "status": "Open",
+      "title": "Добавить healthcheck",
+      "author_email": "author@example.com",
+      "assignee_email": "agent@example.com",
+      "description": "Нужно добавить GET /health и покрыть его тестом.",
+      "links": [],
+      "comments": [],
+      "metadata": {
+        "repository": "simple-agent",
+        "priority": "normal"
+      }
+    }
+  ]
+}

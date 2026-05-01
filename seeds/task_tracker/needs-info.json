@@ -1,0 +1,32 @@
+{
+  "project_key": "PROJECT",
+  "tasks": [
+    {
+      "id": "PROJECT-40",
+      "type": "task",
+      "status": "NeedsInfo",
+      "title": "Уточнить формат отчета",
+      "author_email": "author@example.com",
+      "assignee_email": "agent@example.com",
+      "description": "Агенту нужен ответ по ожидаемому формату отчета.",
+      "links": [],
+      "comments": [
+        {
+          "id": "comment-1",
+          "author_email": "agent@example.com",
+          "body": "Какой формат итогового отчета ожидается?",
+          "created_at": "2026-05-01T12:00:00Z"
+        },
+        {
+          "id": "comment-2",
+          "author_email": "author@example.com",
+          "body": "Нужен краткий список изменений и проверок.",
+          "created_at": "2026-05-01T12:15:00Z"
+        }
+      ],
+      "metadata": {
+        "priority": "normal"
+      }
+    }
+  ]
+}

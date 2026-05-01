@@ -1,0 +1,19 @@
+{
+  "project_key": "PROJECT",
+  "tasks": [
+    {
+      "id": "PROJECT-30",
+      "type": "test",
+      "status": "Todo",
+      "title": "Проверить сценарий выполнения",
+      "author_email": "qa@example.com",
+      "assignee_email": "agent@example.com",
+      "description": "Нужно проверить выполнение тестового сценария.",
+      "links": [],
+      "comments": [],
+      "metadata": {
+        "priority": "low"
+      }
+    }
+  ]
+}

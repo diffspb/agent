@@ -1,0 +1,38 @@
+{
+  "project_key": "PROJECT",
+  "tasks": [
+    {
+      "id": "PROJECT-10",
+      "type": "epic",
+      "status": "Open",
+      "title": "MVP агента",
+      "author_email": "author@example.com",
+      "assignee_email": "lead@example.com",
+      "description": "Эпик для MVP автономного агента.",
+      "links": [],
+      "comments": [],
+      "metadata": {
+        "priority": "high"
+      }
+    },
+    {
+      "id": "PROJECT-11",
+      "type": "task",
+      "status": "Open",
+      "title": "Реализовать запуск задачи",
+      "author_email": "author@example.com",
+      "assignee_email": "agent@example.com",
+      "description": "Агент должен уметь запускать задачу из таск-трекера.",
+      "links": [
+        {
+          "type": "part_of_epic",
+          "target": "PROJECT-10"
+        }
+      ],
+      "comments": [],
+      "metadata": {
+        "priority": "high"
+      }
+    }
+  ]
+}
