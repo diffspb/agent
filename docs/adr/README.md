@@ -32,3 +32,5 @@ NNNN-short-title.md
 ## Записи
 
 - [0001. Исполнительное ядро как Python-библиотека и FastAPI как управляющий сервис](0001-python-library-runtime-fastapi-service.md)
+- [0002. Ограничения разработки и локального запуска](0002-development-workflow-and-local-runtime.md)
+- [0003. MCP-эмулятор таск-трекера с JSON-состоянием](0003-mcp-task-tracker-emulator.md)
