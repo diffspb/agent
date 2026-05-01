@@ -5,7 +5,7 @@ UVICORN ?= .venv/bin/uvicorn
 
 DB_PATH ?= .data/simple-agent.sqlite3
 BACKEND_HOST ?= 127.0.0.1
-BACKEND_PORT ?= 8000
+BACKEND_PORT ?= 8010
 FRONTEND_PORT ?= 5173
 
 .PHONY: help install run-agent reset-db test check \
@@ -36,7 +36,7 @@ install:
 	$(PIP) install -e ".[dev]"
 
 run-agent:
-	SIMPLE_AGENT_DB_PATH="$(DB_PATH)" $(UVICORN) simple_agent.service.app:app --reload --host "$(BACKEND_HOST)" --port "$(BACKEND_PORT)"
+	SIMPLE_AGENT_DB_PATH="$(DB_PATH)" $(UVICORN) simple_agent.service.asgi:app --reload --host "$(BACKEND_HOST)" --port "$(BACKEND_PORT)"
 
 reset-db:
 	rm -f "$(DB_PATH)" "$(DB_PATH)-shm" "$(DB_PATH)-wal"

@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from simple_agent.config import Settings, load_settings
 from simple_agent.service.routes_runs import router as runs_router
 from simple_agent.service.routes_stats import router as stats_router
-from simple_agent.service.routes_tasks import router as tasks_router
+from simple_agent.service.routes_ticks import router as ticks_router
 from simple_agent.storage import Repository, SqliteDatabase
 
 
@@ -30,11 +30,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "environment": app_settings.environment,
         }
 
-    app.include_router(tasks_router)
+    app.include_router(ticks_router)
     app.include_router(runs_router)
     app.include_router(stats_router)
 
     return app
-
-
-app = create_app()

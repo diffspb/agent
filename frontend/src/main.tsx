@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = "http://127.0.0.1:8010";
 
 type HealthState =
   | { status: "loading" }
@@ -14,18 +14,21 @@ type Loadable<T> =
   | { status: "ok"; data: T }
   | { status: "error"; message: string };
 
-type Task = {
+type AgentTick = {
   id: number;
-  external_id: string | null;
-  type: string;
+  source: string;
   status: string;
-  title: string;
-  assignee_email: string | null;
+  trigger_task_id: string | null;
+  started_at: string;
+  finished_at: string | null;
+  error: string | null;
 };
 
 type Run = {
   id: number;
-  task_id: number;
+  tick_id: number | null;
+  external_task_id: string;
+  branch_name: string | null;
   status: string;
   started_at: string;
   finished_at: string | null;
@@ -33,17 +36,17 @@ type Run = {
 };
 
 type Stats = {
-  tasks_total: number;
+  ticks_total: number;
+  task_candidates_total: number;
   runs_total: number;
   runs_by_status: Record<string, number>;
   events_total: number;
   tool_calls_total: number;
-  agent_notes_total: number;
 };
 
 function App() {
   const [health, setHealth] = useState<HealthState>({ status: "loading" });
-  const [tasks, setTasks] = useState<Loadable<Task[]>>({ status: "loading" });
+  const [ticks, setTicks] = useState<Loadable<AgentTick[]>>({ status: "loading" });
   const [runs, setRuns] = useState<Loadable<Run[]>>({ status: "loading" });
   const [stats, setStats] = useState<Loadable<Stats>>({ status: "loading" });
 
@@ -71,7 +74,7 @@ function App() {
   }
 
   async function loadDashboard() {
-    setTasks({ status: "loading" });
+    setTicks({ status: "loading" });
     setRuns({ status: "loading" });
     setStats({ status: "loading" });
 
@@ -84,17 +87,17 @@ function App() {
     };
 
     try {
-      const [tasksPayload, runsPayload, statsPayload] = await Promise.all([
-        load<Task[]>("/api/tasks"),
+      const [ticksPayload, runsPayload, statsPayload] = await Promise.all([
+        load<AgentTick[]>("/api/ticks"),
         load<Run[]>("/api/runs"),
         load<Stats>("/api/stats"),
       ]);
-      setTasks({ status: "ok", data: tasksPayload });
+      setTicks({ status: "ok", data: ticksPayload });
       setRuns({ status: "ok", data: runsPayload });
       setStats({ status: "ok", data: statsPayload });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      setTasks({ status: "error", message });
+      setTicks({ status: "error", message });
       setRuns({ status: "error", message });
       setStats({ status: "error", message });
     }
@@ -155,8 +158,12 @@ function App() {
           {stats.status === "ok" && (
             <dl className="stats-grid">
               <div>
-                <dt>Задачи</dt>
-                <dd>{stats.data.tasks_total}</dd>
+                <dt>Tick</dt>
+                <dd>{stats.data.ticks_total}</dd>
+              </div>
+              <div>
+                <dt>Кандидаты</dt>
+                <dd>{stats.data.task_candidates_total}</dd>
               </div>
               <div>
                 <dt>Запуски</dt>
@@ -165,10 +172,6 @@ function App() {
               <div>
                 <dt>События</dt>
                 <dd>{stats.data.events_total}</dd>
-              </div>
-              <div>
-                <dt>Вызовы инструментов</dt>
-                <dd>{stats.data.tool_calls_total}</dd>
               </div>
             </dl>
           )}
@@ -197,39 +200,41 @@ function App() {
       </section>
 
       <section className="panel">
-        <h2>Задачи</h2>
-        {tasks.status === "loading" && <p className="muted">Загрузка...</p>}
-        {tasks.status === "error" && (
-          <p className="status-error">Ошибка: {tasks.message}</p>
+        <h2>Tick</h2>
+        {ticks.status === "loading" && <p className="muted">Загрузка...</p>}
+        {ticks.status === "error" && (
+          <p className="status-error">Ошибка: {ticks.message}</p>
         )}
-        {tasks.status === "ok" &&
-          (tasks.data.length > 0 ? (
+        {ticks.status === "ok" &&
+          (ticks.data.length > 0 ? (
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
                     <th>ID</th>
-                    <th>Внешний ID</th>
+                    <th>Источник</th>
                     <th>Статус</th>
-                    <th>Название</th>
-                    <th>Исполнитель</th>
+                    <th>Задача</th>
+                    <th>Старт</th>
+                    <th>Ошибка</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {tasks.data.map((task) => (
-                    <tr key={task.id}>
-                      <td>{task.id}</td>
-                      <td>{task.external_id ?? "-"}</td>
-                      <td>{task.status}</td>
-                      <td>{task.title}</td>
-                      <td>{task.assignee_email ?? "-"}</td>
+                  {ticks.data.map((tick) => (
+                    <tr key={tick.id}>
+                      <td>{tick.id}</td>
+                      <td>{tick.source}</td>
+                      <td>{tick.status}</td>
+                      <td>{tick.trigger_task_id ?? "-"}</td>
+                      <td>{formatDate(tick.started_at)}</td>
+                      <td>{tick.error ?? "-"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <p className="muted">Локальных задач пока нет.</p>
+            <p className="muted">Tick-событий пока нет.</p>
           ))}
       </section>
 
@@ -246,7 +251,9 @@ function App() {
                 <thead>
                   <tr>
                     <th>ID</th>
+                    <th>Tick</th>
                     <th>Задача</th>
+                    <th>Ветка</th>
                     <th>Статус</th>
                     <th>Старт</th>
                     <th>Итог</th>
@@ -256,7 +263,9 @@ function App() {
                   {runs.data.map((run) => (
                     <tr key={run.id}>
                       <td>{run.id}</td>
-                      <td>{run.task_id}</td>
+                      <td>{run.tick_id ?? "-"}</td>
+                      <td>{run.external_task_id}</td>
+                      <td>{run.branch_name ?? "-"}</td>
                       <td>{run.status}</td>
                       <td>{formatDate(run.started_at)}</td>
                       <td>{run.summary ?? "-"}</td>

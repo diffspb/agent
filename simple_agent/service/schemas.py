@@ -1,7 +1,13 @@
 from datetime import datetime
 from typing import Any
 
-from simple_agent.storage.models import EventRecord, RunRecord, StatsRecord, TaskRecord
+from simple_agent.storage.models import (
+    AgentTickRecord,
+    EventRecord,
+    RunRecord,
+    StatsRecord,
+    TaskCandidateRecord,
+)
 
 
 def _format_datetime(value: datetime | None) -> str | None:
@@ -10,26 +16,41 @@ def _format_datetime(value: datetime | None) -> str | None:
     return value.isoformat()
 
 
-def task_to_response(task: TaskRecord) -> dict[str, Any]:
+def tick_to_response(tick: AgentTickRecord) -> dict[str, Any]:
     return {
-        "id": task.id,
-        "external_id": task.external_id,
-        "type": task.type,
-        "status": task.status,
-        "title": task.title,
-        "author_email": task.author_email,
-        "assignee_email": task.assignee_email,
-        "description": task.description,
-        "metadata": task.metadata,
-        "created_at": _format_datetime(task.created_at),
-        "updated_at": _format_datetime(task.updated_at),
+        "id": tick.id,
+        "source": tick.source,
+        "status": tick.status,
+        "trigger_task_id": tick.trigger_task_id,
+        "payload": tick.payload,
+        "started_at": _format_datetime(tick.started_at),
+        "finished_at": _format_datetime(tick.finished_at),
+        "error": tick.error,
+    }
+
+
+def task_candidate_to_response(candidate: TaskCandidateRecord) -> dict[str, Any]:
+    return {
+        "id": candidate.id,
+        "tick_id": candidate.tick_id,
+        "external_task_id": candidate.external_task_id,
+        "status": candidate.status,
+        "assignee_email": candidate.assignee_email,
+        "priority": candidate.priority,
+        "dependencies_state": candidate.dependencies_state,
+        "decision": candidate.decision,
+        "reason": candidate.reason,
+        "metadata": candidate.metadata,
+        "created_at": _format_datetime(candidate.created_at),
     }
 
 
 def run_to_response(run: RunRecord) -> dict[str, Any]:
     return {
         "id": run.id,
-        "task_id": run.task_id,
+        "tick_id": run.tick_id,
+        "external_task_id": run.external_task_id,
+        "branch_name": run.branch_name,
         "status": run.status,
         "started_at": _format_datetime(run.started_at),
         "finished_at": _format_datetime(run.finished_at),
@@ -43,6 +64,7 @@ def run_to_response(run: RunRecord) -> dict[str, Any]:
 def event_to_response(event: EventRecord) -> dict[str, Any]:
     return {
         "id": event.id,
+        "tick_id": event.tick_id,
         "run_id": event.run_id,
         "type": event.type,
         "message": event.message,
@@ -53,10 +75,10 @@ def event_to_response(event: EventRecord) -> dict[str, Any]:
 
 def stats_to_response(stats: StatsRecord) -> dict[str, Any]:
     return {
-        "tasks_total": stats.tasks_total,
+        "ticks_total": stats.ticks_total,
+        "task_candidates_total": stats.task_candidates_total,
         "runs_total": stats.runs_total,
         "runs_by_status": stats.runs_by_status,
         "events_total": stats.events_total,
         "tool_calls_total": stats.tool_calls_total,
-        "agent_notes_total": stats.agent_notes_total,
     }

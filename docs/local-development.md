@@ -42,6 +42,8 @@ make run-agent
 make run-agent DB_PATH=.data/dev.sqlite3
 ```
 
+ASGI-приложение для прямого запуска uvicorn находится в `simple_agent.service.asgi:app`.
+
 Сбросить локальную базу:
 
 ```bash

@@ -7,24 +7,38 @@ JsonObject = dict[str, Any]
 
 
 @dataclass(frozen=True)
-class TaskRecord:
+class AgentTickRecord:
     id: int
-    external_id: str | None
-    type: str
+    source: str
     status: str
-    title: str
-    author_email: str | None
+    trigger_task_id: str | None
+    payload: JsonObject
+    started_at: datetime
+    finished_at: datetime | None
+    error: str | None
+
+
+@dataclass(frozen=True)
+class TaskCandidateRecord:
+    id: int
+    tick_id: int
+    external_task_id: str
+    status: str
     assignee_email: str | None
-    description: str
+    priority: int | None
+    dependencies_state: str
+    decision: str
+    reason: str | None
     metadata: JsonObject
     created_at: datetime
-    updated_at: datetime
 
 
 @dataclass(frozen=True)
 class RunRecord:
     id: int
-    task_id: int
+    tick_id: int | None
+    external_task_id: str
+    branch_name: str | None
     status: str
     started_at: datetime
     finished_at: datetime | None
@@ -37,7 +51,8 @@ class RunRecord:
 @dataclass(frozen=True)
 class EventRecord:
     id: int
-    run_id: int
+    tick_id: int | None
+    run_id: int | None
     type: str
     message: str
     payload: JsonObject
@@ -58,20 +73,10 @@ class ToolCallRecord:
 
 
 @dataclass(frozen=True)
-class AgentNoteRecord:
-    id: int
-    task_id: int | None
-    run_id: int | None
-    key: str
-    value: str
-    created_at: datetime
-
-
-@dataclass(frozen=True)
 class StatsRecord:
-    tasks_total: int
+    ticks_total: int
+    task_candidates_total: int
     runs_total: int
     runs_by_status: dict[str, int]
     events_total: int
     tool_calls_total: int
-    agent_notes_total: int
