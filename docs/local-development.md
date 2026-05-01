@@ -33,13 +33,19 @@ python -m pip install -e ".[dev]"
 Запустить API:
 
 ```bash
-uvicorn simple_agent.service.app:app --reload --host 127.0.0.1 --port 8000
+make run-agent
 ```
 
 По умолчанию backend использует SQLite-файл `.data/simple-agent.sqlite3`. Для отдельного файла можно задать:
 
 ```bash
-export SIMPLE_AGENT_DB_PATH=.data/dev.sqlite3
+make run-agent DB_PATH=.data/dev.sqlite3
+```
+
+Сбросить локальную базу:
+
+```bash
+make reset-db
 ```
 
 Проверить healthcheck:
@@ -63,7 +69,7 @@ curl --noproxy "*" http://127.0.0.1:8000/api/stats
 Тесты запускаются только из активированного виртуального окружения:
 
 ```bash
-pytest
+make test
 ```
 
 ## Frontend
@@ -71,14 +77,19 @@ pytest
 Установить зависимости:
 
 ```bash
-cd frontend
-npm install
+make frontend-install
 ```
 
 Запустить Vite dev-server:
 
 ```bash
-npm run dev
+make frontend-dev
+```
+
+Собрать frontend:
+
+```bash
+make frontend-build
 ```
 
 Frontend будет доступен на `http://127.0.0.1:5173`.
