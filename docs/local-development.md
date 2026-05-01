@@ -42,6 +42,8 @@ make run-agent
 make run-agent DB_PATH=.data/dev.sqlite3
 ```
 
+ASGI-приложение для прямого запуска uvicorn находится в `simple_agent.service.asgi:app`.
+
 Сбросить локальную базу:
 
 ```bash
@@ -51,15 +53,15 @@ make reset-db
 Проверить healthcheck:
 
 ```bash
-curl --noproxy "*" http://127.0.0.1:8000/health
+curl --noproxy "*" http://127.0.0.1:8010/health
 ```
 
 Проверить endpoints хранилища и наблюдаемости:
 
 ```bash
-curl --noproxy "*" http://127.0.0.1:8000/api/tasks
-curl --noproxy "*" http://127.0.0.1:8000/api/runs
-curl --noproxy "*" http://127.0.0.1:8000/api/stats
+curl --noproxy "*" http://127.0.0.1:8010/api/ticks
+curl --noproxy "*" http://127.0.0.1:8010/api/runs
+curl --noproxy "*" http://127.0.0.1:8010/api/stats
 ```
 
 В WSL или окружениях с proxy важно обходить proxy для локальных адресов. Для `curl` используйте `--noproxy "*"`.

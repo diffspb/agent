@@ -29,7 +29,7 @@ async def test_cors_allows_local_vite_ports(tmp_path: Path) -> None:
 
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         response = await client.options(
-            "/api/tasks",
+            "/api/ticks",
             headers={
                 "Origin": "http://127.0.0.1:5174",
                 "Access-Control-Request-Method": "GET",
