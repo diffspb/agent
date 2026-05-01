@@ -30,7 +30,7 @@ button:hover {
 }
 
 .app-shell {
-  width: min(920px, calc(100vw - 32px));
+  width: min(1120px, calc(100vw - 32px));
   margin: 32px auto;
 }
 
@@ -69,14 +69,36 @@ p {
   background: #ffffff;
 }
 
-.health-grid {
+.compact-panel {
+  margin-bottom: 16px;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.dashboard-grid + .panel,
+.panel + .panel {
+  margin-top: 16px;
+}
+
+.health-grid,
+.stats-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin: 0;
 }
 
-.health-grid div {
+.stats-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.health-grid div,
+.stats-grid div {
   border: 1px solid #d8e3e8;
   border-radius: 6px;
   padding: 12px;
@@ -101,14 +123,64 @@ dd {
   color: #a1282f;
 }
 
+.status-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.status-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #e3ebef;
+  padding-bottom: 10px;
+}
+
+.status-list li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e3ebef;
+  padding: 10px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: #526773;
+  font-weight: 600;
+}
+
+td {
+  min-width: 96px;
+}
+
 @media (max-width: 680px) {
   .toolbar {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .health-grid {
+  .dashboard-grid,
+  .health-grid,
+  .stats-grid {
     grid-template-columns: 1fr;
   }
 }
-
