@@ -123,12 +123,12 @@ class TaskTracker:
 
 Полезные MCP-инструменты для трекера:
 
-- `workflow.get`
-- `tasks.get`
-- `tasks.list`
-- `tasks.update`
-- `comments.add`
-- `comments.list`
+- `workflow_get`
+- `tasks_get`
+- `tasks_list`
+- `tasks_update`
+- `comments_add`
+- `comments_list`
 
 MCP-ресурсы могут отдавать описания задач, вложения, критерии приемки, метаданные репозитория и связанные документы.
 

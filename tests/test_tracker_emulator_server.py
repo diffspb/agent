@@ -17,12 +17,12 @@ async def test_mcp_server_registers_required_tools(tmp_path: Path) -> None:
     tools = await server.list_tools()
 
     assert {tool.name for tool in tools} == {
-        "workflow.get",
-        "tasks.get",
-        "tasks.list",
-        "tasks.update",
-        "comments.add",
-        "comments.list",
+        "workflow_get",
+        "tasks_get",
+        "tasks_list",
+        "tasks_update",
+        "comments_add",
+        "comments_list",
     }
 
 
@@ -34,7 +34,7 @@ async def test_mcp_server_calls_registered_tool(tmp_path: Path) -> None:
     )
     server = create_mcp_server(store, host="127.0.0.1", port=8020)
 
-    _, result = await server.call_tool("tasks.get", {"id": "PROJECT-1"})
+    _, result = await server.call_tool("tasks_get", {"id": "PROJECT-1"})
 
     assert result["id"] == "PROJECT-1"
     assert result["status"] == "Open"

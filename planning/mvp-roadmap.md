@@ -86,12 +86,12 @@
   - мета-информация как пары ключ-значение.
 - Поддержать workflow `Todo`, `Open`, `InProgress`, `InReview`, `NeedsInfo`, `Done`, `Cancelled` с любыми переходами.
 - Поддержать MCP-инструменты:
-  - `workflow.get`;
-  - `tasks.get`;
-  - `tasks.list`;
-  - `tasks.update`;
-  - `comments.add`;
-  - `comments.list`.
+  - `workflow_get`;
+  - `tasks_get`;
+  - `tasks_list`;
+  - `tasks_update`;
+  - `comments_add`;
+  - `comments_list`.
 - Добавить seed JSON-файлы для локальных сценариев.
 
 Проверка:

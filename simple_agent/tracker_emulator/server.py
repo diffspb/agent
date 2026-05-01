@@ -19,17 +19,17 @@ def create_mcp_server(store: TaskTrackerStore, *, host: str, port: int) -> FastM
         stateless_http=True,
     )
 
-    @mcp.tool(name="workflow.get")
+    @mcp.tool(name="workflow_get")
     def workflow_get() -> dict[str, Any]:
         """Получить фиксированный workflow таск-трекера."""
         return store.workflow_get()
 
-    @mcp.tool(name="tasks.get")
+    @mcp.tool(name="tasks_get")
     def tasks_get(id: str) -> dict[str, Any]:
         """Получить задачу по идентификатору вида PROJECT-123."""
         return _as_tool_error(store.tasks_get, id)
 
-    @mcp.tool(name="tasks.list")
+    @mcp.tool(name="tasks_list")
     def tasks_list(
         status: str | None = None,
         assignee_email: str | None = None,
@@ -37,12 +37,12 @@ def create_mcp_server(store: TaskTrackerStore, *, host: str, port: int) -> FastM
         """Получить задачи по статусу и исполнителю email."""
         return store.tasks_list(status=status, assignee_email=assignee_email)
 
-    @mcp.tool(name="tasks.update")
+    @mcp.tool(name="tasks_update")
     def tasks_update(id: str, patch: dict[str, Any]) -> dict[str, Any]:
         """Изменить задачу, включая статус."""
         return _as_tool_error(store.tasks_update, id=id, patch=patch)
 
-    @mcp.tool(name="comments.add")
+    @mcp.tool(name="comments_add")
     def comments_add(task_id: str, author_email: str, body: str) -> dict[str, Any]:
         """Добавить комментарий к задаче."""
         return _as_tool_error(
@@ -52,7 +52,7 @@ def create_mcp_server(store: TaskTrackerStore, *, host: str, port: int) -> FastM
             body=body,
         )
 
-    @mcp.tool(name="comments.list")
+    @mcp.tool(name="comments_list")
     def comments_list(task_id: str) -> list[dict[str, Any]]:
         """Получить комментарии задачи."""
         return _as_tool_error(store.comments_list, task_id=task_id)
