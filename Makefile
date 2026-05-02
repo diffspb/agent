@@ -16,7 +16,7 @@ AGENT_EMAIL ?= agent@example.com
 TASK_TRACKER_MCP_URL ?= http://$(MCP_HOST):$(MCP_PORT)/mcp
 TASK_TRACKER_MCP_TIMEOUT_SECONDS ?= 30
 
-.PHONY: help install run-agent reset-db test check \
+.PHONY: help install run-agent reset-db test check generate-mcp-docs \
 	frontend-install frontend-dev frontend-build frontend-preview frontend-test \
 	run-task-tracker reset-task-tracker
 
@@ -27,6 +27,7 @@ help:
 	@echo "  make reset-db         Удалить локальную SQLite-базу"
 	@echo "  make run-task-tracker Запустить MCP-эмулятор таск-трекера"
 	@echo "  make reset-task-tracker Удалить snapshot MCP-эмулятора"
+	@echo "  make generate-mcp-docs Сгенерировать документацию MCP tools"
 	@echo "  make test             Запустить backend-тесты"
 	@echo "  make check            Запустить backend-тесты и сборку frontend"
 	@echo ""
@@ -63,6 +64,9 @@ run-task-tracker:
 
 reset-task-tracker:
 	rm -f "$(MCP_SNAPSHOT_FILE)"
+
+generate-mcp-docs:
+	PYTHONPATH="emulator" $(PYTHON) -m task_tracker_emulator.tool_docs --state-file "$(MCP_STATE_FILE)" --output docs/mcp-task-tracker-tools.md
 
 test:
 	PYTHONPATH="$(PYTHONPATH)" $(PYTEST) -vv
