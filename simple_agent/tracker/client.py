@@ -20,3 +20,18 @@ class TaskTrackerClient(Protocol):
         assignee_email: str | None = None,
     ) -> list[JsonObject]:
         raise NotImplementedError
+
+    async def tasks_update(self, task_id: str, patch: JsonObject) -> JsonObject:
+        raise NotImplementedError
+
+    async def comments_add(
+        self,
+        *,
+        task_id: str,
+        author_email: str,
+        body: str,
+    ) -> JsonObject:
+        raise NotImplementedError
+
+    async def comments_list(self, task_id: str) -> list[JsonObject]:
+        raise NotImplementedError

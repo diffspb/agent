@@ -38,6 +38,31 @@ class McpTaskTrackerClient:
         payload = await self._call_tool("tasks_list", arguments)
         return _expect_object_list(payload)
 
+    async def tasks_update(self, task_id: str, patch: JsonObject) -> JsonObject:
+        payload = await self._call_tool("tasks_update", {"id": task_id, "patch": patch})
+        return _expect_object(payload)
+
+    async def comments_add(
+        self,
+        *,
+        task_id: str,
+        author_email: str,
+        body: str,
+    ) -> JsonObject:
+        payload = await self._call_tool(
+            "comments_add",
+            {
+                "task_id": task_id,
+                "author_email": author_email,
+                "body": body,
+            },
+        )
+        return _expect_object(payload)
+
+    async def comments_list(self, task_id: str) -> list[JsonObject]:
+        payload = await self._call_tool("comments_list", {"task_id": task_id})
+        return _expect_object_list(payload)
+
     async def _call_tool(self, name: str, arguments: JsonObject) -> Any:
         async with streamablehttp_client(
             self.url,

@@ -93,6 +93,26 @@ curl --noproxy "*" \
   -d '{"task_id":"PROJECT-1","event":"task.updated"}'
 ```
 
+Запустить выбранный run примитивным runtime:
+
+```bash
+curl --noproxy "*" \
+  -X POST http://127.0.0.1:8010/api/runs/1/start
+```
+
+Отменить queued или running run:
+
+```bash
+curl --noproxy "*" \
+  -X POST http://127.0.0.1:8010/api/runs/1/cancel
+```
+
+Получить события run:
+
+```bash
+curl --noproxy "*" http://127.0.0.1:8010/api/runs/1/events
+```
+
 В WSL или окружениях с proxy важно обходить proxy для локальных адресов. Для `curl` используйте `--noproxy "*"`.
 MCP-клиент агента в сервисе отключает использование proxy-переменных для своих HTTP-вызовов к MCP endpoint.
 
