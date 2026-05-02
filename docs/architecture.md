@@ -91,6 +91,8 @@
 
 В этапе 4 реализован `PrimitiveAgentRuntime` без LLM и без редактирования кода. Он запускает уже созданный run, загружает задачу из MCP-трекера, переводит ее в `InProgress`, пишет комментарии о начале и завершении stub-работы, переводит задачу в `Done` и завершает run. Это первый исполняемый контур жизненного цикла, но не целевой кодовый агент.
 
+В этапе 6 добавлен `LLMAgentRuntime`. Он сохраняет тот же lifecycle задачи, но внутри выполнения использует `LLMClient`, prompt layer и локальный registry инструментов. Доступны режимы `primitive`, `llm_stub` и `llm`, выбираемые через `AGENT_RUNTIME_MODE`.
+
 Предлагаемые состояния задачи:
 
 ```text
@@ -171,7 +173,11 @@ class LLMClient:
 LLM_BASE_URL
 LLM_API_KEY
 LLM_MODEL
+LLM_MAX_STEPS
+LLM_TIMEOUT_SECONDS
 ```
+
+В этапе 6 в качестве provider layer выбран LiteLLM. Runtime зависит от собственного интерфейса `LLMClient`; `LiteLLMClient` только нормализует вызовы и ответы LiteLLM. Решение зафиксировано в [ADR-0005](adr/0005-litellm-provider-layer.md).
 
 ### Реестр Инструментов
 

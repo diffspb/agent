@@ -1,7 +1,17 @@
 from __future__ import annotations
 
-from simple_agent.agent.runtime import PrimitiveAgentRuntime, RuntimeResult
+from typing import Any, Protocol
+
+from simple_agent.agent.runtime import RuntimeResult
 from simple_agent.storage.repository import Repository
+
+
+class AgentRuntime(Protocol):
+    async def start_run(self, run: Any) -> RuntimeResult:
+        raise NotImplementedError
+
+    async def cancel_run(self, run: Any) -> RuntimeResult:
+        raise NotImplementedError
 
 
 class AgentController:
@@ -9,7 +19,7 @@ class AgentController:
         self,
         *,
         repository: Repository,
-        runtime: PrimitiveAgentRuntime,
+        runtime: AgentRuntime,
     ) -> None:
         self.repository = repository
         self.runtime = runtime

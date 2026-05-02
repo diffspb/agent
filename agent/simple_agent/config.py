@@ -16,6 +16,12 @@ class Settings:
     tool_command_timeout_seconds: float = 10.0
     tool_output_max_bytes: int = 32_000
     tool_file_read_max_bytes: int = 128_000
+    agent_runtime_mode: str = "primitive"
+    llm_base_url: str | None = None
+    llm_api_key: str | None = None
+    llm_model: str = "openai/gpt-5-mini"
+    llm_max_steps: int = 6
+    llm_timeout_seconds: float = 60.0
 
 
 def load_settings() -> Settings:
@@ -41,4 +47,10 @@ def load_settings() -> Settings:
         ),
         tool_output_max_bytes=int(os.getenv("TOOL_OUTPUT_MAX_BYTES", "32000")),
         tool_file_read_max_bytes=int(os.getenv("TOOL_FILE_READ_MAX_BYTES", "128000")),
+        agent_runtime_mode=os.getenv("AGENT_RUNTIME_MODE", "primitive"),
+        llm_base_url=os.getenv("LLM_BASE_URL") or None,
+        llm_api_key=os.getenv("LLM_API_KEY") or None,
+        llm_model=os.getenv("LLM_MODEL", "openai/gpt-5-mini"),
+        llm_max_steps=int(os.getenv("LLM_MAX_STEPS", "6")),
+        llm_timeout_seconds=float(os.getenv("LLM_TIMEOUT_SECONDS", "60.0")),
     )

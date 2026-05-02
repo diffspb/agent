@@ -60,6 +60,34 @@ async def test_run_cancel_endpoint_cancels_queued_run(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
+async def test_run_start_endpoint_supports_llm_stub_mode(tmp_path: Path) -> None:
+    app = create_app(
+        Settings(
+            database_path=tmp_path / "run-llm-stub.sqlite3",
+            agent_email="agent@example.com",
+            workspace_root=tmp_path / "workspaces",
+            agent_runtime_mode="llm_stub",
+        )
+    )
+    repository = app.state.repository
+    run = repository.create_run(external_task_id="PROJECT-1", status="queued")
+    tracker = FakeTracker([_task("PROJECT-1")])
+    app.state.task_tracker_factory = lambda: tracker
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(f"/api/runs/{run.id}/start")
+        events_response = await client.get(f"/api/runs/{run.id}/events")
+        tool_calls_response = await client.get(f"/api/runs/{run.id}/tool-calls")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
+    assert tracker.comments["PROJECT-1"][-1]["body"] == "Задача выполнена в stub-режиме LLM."
+    assert "llm.responded" in [event["type"] for event in events_response.json()]
+    assert tool_calls_response.json()[0]["tool_name"] == "write_file"
+
+
+@pytest.mark.anyio
 async def test_run_start_endpoint_rejects_completed_run(tmp_path: Path) -> None:
     app = create_app(
         Settings(
