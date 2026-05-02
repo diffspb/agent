@@ -215,6 +215,37 @@ class Repository:
             ).fetchone()
         return _run_from_row(row) if row else None
 
+    def update_run(
+        self,
+        run_id: int,
+        *,
+        status: str,
+        summary: str | None = None,
+        error: str | None = None,
+        finished: bool = False,
+    ) -> RunRecord:
+        finished_at_expression = (
+            "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')" if finished else "finished_at"
+        )
+        with self.database.connect() as connection:
+            connection.execute(
+                f"""
+                UPDATE runs
+                SET status = ?,
+                    summary = COALESCE(?, summary),
+                    error = ?,
+                    finished_at = {finished_at_expression},
+                    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                WHERE id = ?
+                """,
+                (status, summary, error, run_id),
+            )
+
+        run = self.get_run(run_id)
+        if run is None:
+            raise RuntimeError("Updated run was not found")
+        return run
+
     def get_active_run_for_task(self, external_task_id: str) -> RunRecord | None:
         active_statuses = ("queued", "running")
         placeholders = ", ".join("?" for _ in active_statuses)

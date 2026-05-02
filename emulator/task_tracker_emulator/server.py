@@ -6,8 +6,8 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from simple_agent.tracker_emulator.errors import InvalidPatchError, TaskNotFoundError
-from simple_agent.tracker_emulator.store import TaskTrackerStore
+from task_tracker_emulator.errors import InvalidPatchError, TaskNotFoundError
+from task_tracker_emulator.store import TaskTrackerStore
 
 
 def create_mcp_server(store: TaskTrackerStore, *, host: str, port: int) -> FastMCP:

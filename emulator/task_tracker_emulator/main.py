@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from simple_agent.tracker_emulator.server import load_mcp_server
+from task_tracker_emulator.server import load_mcp_server
 
 
 def main() -> None:

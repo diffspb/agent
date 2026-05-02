@@ -11,8 +11,17 @@
 - [Локальный запуск](local-development.md): установка зависимостей, запуск backend, тестов и frontend без Docker.
 - [Хранилище сервиса](storage.md): SQLite-схема, repository layer и endpoints наблюдаемости.
 - [MCP-эмулятор таск-трекера](mcp-task-tracker-emulator.md): модель задач, workflow, JSON-состояние и MCP API примитивного трекера.
+- [MCP tools таск-трекера](mcp-task-tracker-tools.md): сгенерированная человекочитаемая документация инструментов MCP-сервера.
 - [Выбор задачи агентом](task-selection.md): правила tick, фильтрации, приоритета, зависимостей и observability.
 - [Индекс ADR](adr/README.md): архитектурные решения.
+
+## Структура Репозитория
+
+- `agent/`: Python-пакет агента и FastAPI-сервис.
+- `emulator/`: отдельный Python-пакет MCP-эмулятора таск-трекера.
+- `frontend/`: тестовый React/Vite UI.
+- `datasets/`: seed-данные и сценарии.
+- `tests/`: тесты, разнесенные по доменам.
 
 ## Планирование
 

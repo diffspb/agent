@@ -2,6 +2,7 @@ PYTHON ?= .venv/bin/python
 PIP ?= $(PYTHON) -m pip
 PYTEST ?= $(PYTHON) -m pytest
 UVICORN ?= .venv/bin/uvicorn
+PYTHONPATH ?= agent:emulator
 
 DB_PATH ?= .data/simple-agent.sqlite3
 BACKEND_HOST ?= 127.0.0.1
@@ -9,13 +10,13 @@ BACKEND_PORT ?= 8010
 FRONTEND_PORT ?= 5173
 MCP_HOST ?= 127.0.0.1
 MCP_PORT ?= 8020
-MCP_STATE_FILE ?= seeds/task_tracker/simple-task.json
+MCP_STATE_FILE ?= datasets/task_tracker/simple-task.json
 MCP_SNAPSHOT_FILE ?= .data/task-tracker-snapshot.json
 AGENT_EMAIL ?= agent@example.com
 TASK_TRACKER_MCP_URL ?= http://$(MCP_HOST):$(MCP_PORT)/mcp
 TASK_TRACKER_MCP_TIMEOUT_SECONDS ?= 30
 
-.PHONY: help install run-agent reset-db test check \
+.PHONY: help install run-agent reset-db test check generate-mcp-docs \
 	frontend-install frontend-dev frontend-build frontend-preview frontend-test \
 	run-task-tracker reset-task-tracker
 
@@ -26,6 +27,7 @@ help:
 	@echo "  make reset-db         Удалить локальную SQLite-базу"
 	@echo "  make run-task-tracker Запустить MCP-эмулятор таск-трекера"
 	@echo "  make reset-task-tracker Удалить snapshot MCP-эмулятора"
+	@echo "  make generate-mcp-docs Сгенерировать документацию MCP tools"
 	@echo "  make test             Запустить backend-тесты"
 	@echo "  make check            Запустить backend-тесты и сборку frontend"
 	@echo ""
@@ -46,24 +48,28 @@ help:
 	@echo "  MCP_SNAPSHOT_FILE=$(MCP_SNAPSHOT_FILE)"
 	@echo "  AGENT_EMAIL=$(AGENT_EMAIL)"
 	@echo "  TASK_TRACKER_MCP_URL=$(TASK_TRACKER_MCP_URL)"
+	@echo "  PYTHONPATH=$(PYTHONPATH)"
 
 install:
 	$(PIP) install -e ".[dev]"
 
 run-agent:
-	SIMPLE_AGENT_DB_PATH="$(DB_PATH)" AGENT_EMAIL="$(AGENT_EMAIL)" TASK_TRACKER_MCP_URL="$(TASK_TRACKER_MCP_URL)" TASK_TRACKER_MCP_TIMEOUT_SECONDS="$(TASK_TRACKER_MCP_TIMEOUT_SECONDS)" $(UVICORN) simple_agent.service.asgi:app --reload --host "$(BACKEND_HOST)" --port "$(BACKEND_PORT)"
+	PYTHONPATH="$(PYTHONPATH)" SIMPLE_AGENT_DB_PATH="$(DB_PATH)" AGENT_EMAIL="$(AGENT_EMAIL)" TASK_TRACKER_MCP_URL="$(TASK_TRACKER_MCP_URL)" TASK_TRACKER_MCP_TIMEOUT_SECONDS="$(TASK_TRACKER_MCP_TIMEOUT_SECONDS)" $(UVICORN) simple_agent.service.asgi:app --reload --host "$(BACKEND_HOST)" --port "$(BACKEND_PORT)"
 
 reset-db:
 	rm -f "$(DB_PATH)" "$(DB_PATH)-shm" "$(DB_PATH)-wal"
 
 run-task-tracker:
-	.venv/bin/simple-agent-task-tracker --state-file "$(MCP_STATE_FILE)" --snapshot-file "$(MCP_SNAPSHOT_FILE)" --host "$(MCP_HOST)" --port "$(MCP_PORT)"
+	PYTHONPATH="emulator" $(PYTHON) -m task_tracker_emulator.main --state-file "$(MCP_STATE_FILE)" --snapshot-file "$(MCP_SNAPSHOT_FILE)" --host "$(MCP_HOST)" --port "$(MCP_PORT)"
 
 reset-task-tracker:
 	rm -f "$(MCP_SNAPSHOT_FILE)"
 
+generate-mcp-docs:
+	PYTHONPATH="emulator" $(PYTHON) -m task_tracker_emulator.tool_docs --state-file "$(MCP_STATE_FILE)" --output docs/mcp-task-tracker-tools.md
+
 test:
-	$(PYTEST) -vv
+	PYTHONPATH="$(PYTHONPATH)" $(PYTEST) -vv
 
 check: test frontend-build
 

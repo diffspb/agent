@@ -158,6 +158,22 @@ dd {
   padding-bottom: 0;
 }
 
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.table-actions button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.selected-row {
+  background: #edf5f7;
+}
+
 .table-wrap {
   overflow-x: auto;
 }

@@ -22,11 +22,12 @@ dev = [
 
 [project.scripts]
 simple-agent-api = "simple_agent.main:main"
-simple-agent-task-tracker = "simple_agent.tracker_emulator.main:main"
+simple-agent-task-tracker = "task_tracker_emulator.main:main"
 
 [tool.setuptools.packages.find]
-include = ["simple_agent*"]
+where = ["agent", "emulator"]
+include = ["simple_agent*", "task_tracker_emulator*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = ["agent", "emulator", "."]

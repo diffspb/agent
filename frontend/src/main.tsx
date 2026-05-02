@@ -35,6 +35,15 @@ type Run = {
   summary: string | null;
 };
 
+type RunEvent = {
+  id: number;
+  tick_id: number | null;
+  run_id: number | null;
+  type: string;
+  message: string;
+  created_at: string;
+};
+
 type TaskCandidate = {
   id: number;
   tick_id: number;
@@ -70,8 +79,15 @@ function App() {
   const [candidates, setCandidates] = useState<Loadable<TaskCandidate[]>>({
     status: "loading",
   });
+  const [events, setEvents] = useState<Loadable<RunEvent[]>>({
+    status: "loading",
+  });
+  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [tickAction, setTickAction] = useState<
     { status: "idle" } | { status: "running" } | { status: "error"; message: string }
+  >({ status: "idle" });
+  const [runAction, setRunAction] = useState<
+    { status: "idle" } | { status: "running"; runId: number } | { status: "error"; message: string }
   >({ status: "idle" });
 
   async function loadHealth() {
@@ -97,11 +113,12 @@ function App() {
     }
   }
 
-  async function loadDashboard() {
+  async function loadDashboard(preferredRunId?: number | null) {
     setTicks({ status: "loading" });
     setRuns({ status: "loading" });
     setStats({ status: "loading" });
     setCandidates({ status: "loading" });
+    setEvents({ status: "loading" });
 
     const load = async <T,>(path: string): Promise<T> => {
       const response = await fetch(`${API_BASE_URL}${path}`);
@@ -120,6 +137,20 @@ function App() {
       setTicks({ status: "ok", data: ticksPayload });
       setRuns({ status: "ok", data: runsPayload });
       setStats({ status: "ok", data: statsPayload });
+      const effectiveRunId = preferredRunId ?? selectedRunId;
+      const runForEvents = effectiveRunId
+        ? runsPayload.find((run) => run.id === effectiveRunId)
+        : runsPayload[0];
+      if (runForEvents) {
+        setSelectedRunId(runForEvents.id);
+        const eventsPayload = await load<RunEvent[]>(
+          `/api/runs/${runForEvents.id}/events`,
+        );
+        setEvents({ status: "ok", data: eventsPayload });
+      } else {
+        setSelectedRunId(null);
+        setEvents({ status: "ok", data: [] });
+      }
       if (ticksPayload.length > 0) {
         const candidatesPayload = await load<TaskCandidate[]>(
           `/api/ticks/${ticksPayload[0].id}/candidates`,
@@ -134,6 +165,7 @@ function App() {
       setRuns({ status: "error", message });
       setStats({ status: "error", message });
       setCandidates({ status: "error", message });
+      setEvents({ status: "error", message });
     }
   }
 
@@ -151,9 +183,28 @@ function App() {
       const payload = (await response.json()) as TickRunResult;
       setCandidates({ status: "ok", data: payload.candidates });
       setTickAction({ status: "idle" });
-      await loadDashboard();
+      await loadDashboard(payload.selected_run?.id);
     } catch (error) {
       setTickAction({
+        status: "error",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  async function runLifecycleAction(runId: number, action: "start" | "cancel") {
+    setRunAction({ status: "running", runId });
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/runs/${runId}/${action}`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      setRunAction({ status: "idle" });
+      await loadDashboard(runId);
+    } catch (error) {
+      setRunAction({
         status: "error",
         message: error instanceof Error ? error.message : "Unknown error",
       });
@@ -188,6 +239,11 @@ function App() {
       {tickAction.status === "error" && (
         <section className="panel compact-panel">
           <p className="status-error">Ошибка запуска tick: {tickAction.message}</p>
+        </section>
+      )}
+      {runAction.status === "error" && (
+        <section className="panel compact-panel">
+          <p className="status-error">Ошибка действия с run: {runAction.message}</p>
         </section>
       )}
 
@@ -324,11 +380,16 @@ function App() {
                     <th>Статус</th>
                     <th>Старт</th>
                     <th>Итог</th>
+                    <th>Действия</th>
                   </tr>
                 </thead>
                 <tbody>
                   {runs.data.map((run) => (
-                    <tr key={run.id}>
+                    <tr
+                      key={run.id}
+                      className={run.id === selectedRunId ? "selected-row" : undefined}
+                      onClick={() => setSelectedRunId(run.id)}
+                    >
                       <td>{run.id}</td>
                       <td>{run.tick_id ?? "-"}</td>
                       <td>{run.external_task_id}</td>
@@ -336,6 +397,36 @@ function App() {
                       <td>{run.status}</td>
                       <td>{formatDate(run.started_at)}</td>
                       <td>{run.summary ?? "-"}</td>
+                      <td>
+                        <div className="table-actions">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void runLifecycleAction(run.id, "start");
+                            }}
+                            disabled={
+                              run.status !== "queued" ||
+                              (runAction.status === "running" && runAction.runId === run.id)
+                            }
+                          >
+                            Старт
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void runLifecycleAction(run.id, "cancel");
+                            }}
+                            disabled={
+                              !["queued", "running"].includes(run.status) ||
+                              (runAction.status === "running" && runAction.runId === run.id)
+                            }
+                          >
+                            Отмена
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -343,6 +434,39 @@ function App() {
             </div>
           ) : (
             <p className="muted">Запусков пока нет.</p>
+          ))}
+      </section>
+
+      <section className="panel">
+        <h2>События run</h2>
+        {events.status === "loading" && <p className="muted">Загрузка...</p>}
+        {events.status === "error" && (
+          <p className="status-error">Ошибка: {events.message}</p>
+        )}
+        {events.status === "ok" &&
+          (events.data.length > 0 ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Время</th>
+                    <th>Тип</th>
+                    <th>Сообщение</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {events.data.map((event) => (
+                    <tr key={event.id}>
+                      <td>{formatDate(event.created_at)}</td>
+                      <td>{event.type}</td>
+                      <td>{event.message}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted">Событий выбранного run пока нет.</p>
           ))}
       </section>
 
