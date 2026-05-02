@@ -8,6 +8,7 @@ from simple_agent.storage.models import (
     RunRecord,
     StatsRecord,
     TaskCandidateRecord,
+    ToolCallRecord,
 )
 
 
@@ -71,6 +72,20 @@ def event_to_response(event: EventRecord) -> dict[str, Any]:
         "message": event.message,
         "payload": event.payload,
         "created_at": _format_datetime(event.created_at),
+    }
+
+
+def tool_call_to_response(tool_call: ToolCallRecord) -> dict[str, Any]:
+    return {
+        "id": tool_call.id,
+        "run_id": tool_call.run_id,
+        "tool_name": tool_call.tool_name,
+        "status": tool_call.status,
+        "input": tool_call.input,
+        "output": tool_call.output,
+        "error": tool_call.error,
+        "started_at": _format_datetime(tool_call.started_at),
+        "finished_at": _format_datetime(tool_call.finished_at),
     }
 
 

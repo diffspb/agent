@@ -13,6 +13,7 @@
 - [MCP-эмулятор таск-трекера](mcp-task-tracker-emulator.md): модель задач, workflow, JSON-состояние и MCP API примитивного трекера.
 - [MCP tools таск-трекера](mcp-task-tracker-tools.md): сгенерированная человекочитаемая документация инструментов MCP-сервера.
 - [Выбор задачи агентом](task-selection.md): правила tick, фильтрации, приоритета, зависимостей и observability.
+- [Политика безопасности инструментов](tool-safety.md): workspace, path safety, shell denylist, timeout и лимиты вывода.
 - [Индекс ADR](adr/README.md): архитектурные решения.
 
 ## Структура Репозитория

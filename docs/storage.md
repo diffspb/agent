@@ -129,6 +129,7 @@ GET /api/ticks/{id}/candidates
 GET /api/runs
 GET /api/runs/{id}
 GET /api/runs/{id}/events
+GET /api/runs/{id}/tool-calls
 GET /api/stats
 ```
 

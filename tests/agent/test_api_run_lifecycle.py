@@ -16,6 +16,7 @@ async def test_run_start_endpoint_completes_queued_run(tmp_path: Path) -> None:
         Settings(
             database_path=tmp_path / "run-start.sqlite3",
             agent_email="agent@example.com",
+            workspace_root=tmp_path / "workspaces",
         )
     )
     repository = app.state.repository
@@ -27,17 +28,25 @@ async def test_run_start_endpoint_completes_queued_run(tmp_path: Path) -> None:
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         response = await client.post(f"/api/runs/{run.id}/start")
         events_response = await client.get(f"/api/runs/{run.id}/events")
+        tool_calls_response = await client.get(f"/api/runs/{run.id}/tool-calls")
 
     assert response.status_code == 200
     assert response.json()["status"] == "completed"
     assert tracker.tasks["PROJECT-1"]["status"] == "Done"
     assert events_response.status_code == 200
     assert events_response.json()[-1]["type"] == "run.completed"
+    assert tool_calls_response.status_code == 200
+    assert tool_calls_response.json()[0]["tool_name"] == "write_file"
 
 
 @pytest.mark.anyio
 async def test_run_cancel_endpoint_cancels_queued_run(tmp_path: Path) -> None:
-    app = create_app(Settings(database_path=tmp_path / "run-cancel.sqlite3"))
+    app = create_app(
+        Settings(
+            database_path=tmp_path / "run-cancel.sqlite3",
+            workspace_root=tmp_path / "workspaces",
+        )
+    )
     repository = app.state.repository
     run = repository.create_run(external_task_id="PROJECT-1", status="queued")
     app.state.task_tracker_factory = lambda: FakeTracker([_task("PROJECT-1")])
@@ -52,7 +61,12 @@ async def test_run_cancel_endpoint_cancels_queued_run(tmp_path: Path) -> None:
 
 @pytest.mark.anyio
 async def test_run_start_endpoint_rejects_completed_run(tmp_path: Path) -> None:
-    app = create_app(Settings(database_path=tmp_path / "run-conflict.sqlite3"))
+    app = create_app(
+        Settings(
+            database_path=tmp_path / "run-conflict.sqlite3",
+            workspace_root=tmp_path / "workspaces",
+        )
+    )
     repository = app.state.repository
     run = repository.create_run(external_task_id="PROJECT-1", status="completed")
     app.state.task_tracker_factory = lambda: FakeTracker([_task("PROJECT-1")])

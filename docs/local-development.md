@@ -57,7 +57,9 @@ make run-agent DB_PATH=.data/dev.sqlite3
 make run-agent \
   AGENT_EMAIL=agent@example.com \
   TASK_TRACKER_MCP_URL=http://127.0.0.1:8020/mcp \
-  TASK_TRACKER_MCP_TIMEOUT_SECONDS=30
+  TASK_TRACKER_MCP_TIMEOUT_SECONDS=30 \
+  WORKSPACE_ROOT=.data/workspaces \
+  TOOL_COMMAND_TIMEOUT_SECONDS=10
 ```
 
 ASGI-приложение для прямого запуска uvicorn находится в `simple_agent.service.asgi:app`. При прямом запуске из корня репозитория задайте `PYTHONPATH=agent:emulator`.
@@ -118,6 +120,12 @@ curl --noproxy "*" \
 
 ```bash
 curl --noproxy "*" http://127.0.0.1:8010/api/runs/1/events
+```
+
+Получить вызовы tools для run:
+
+```bash
+curl --noproxy "*" http://127.0.0.1:8010/api/runs/1/tool-calls
 ```
 
 В WSL или окружениях с proxy важно обходить proxy для локальных адресов. Для `curl` используйте `--noproxy "*"`.

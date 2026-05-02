@@ -12,6 +12,10 @@ class Settings:
     agent_email: str = "agent@example.com"
     task_tracker_mcp_url: str = "http://127.0.0.1:8020/mcp"
     task_tracker_mcp_timeout_seconds: float = 30.0
+    workspace_root: Path = Path(".data/workspaces")
+    tool_command_timeout_seconds: float = 10.0
+    tool_output_max_bytes: int = 32_000
+    tool_file_read_max_bytes: int = 128_000
 
 
 def load_settings() -> Settings:
@@ -31,4 +35,10 @@ def load_settings() -> Settings:
         task_tracker_mcp_timeout_seconds=float(
             os.getenv("TASK_TRACKER_MCP_TIMEOUT_SECONDS", "30.0")
         ),
+        workspace_root=Path(os.getenv("WORKSPACE_ROOT", ".data/workspaces")),
+        tool_command_timeout_seconds=float(
+            os.getenv("TOOL_COMMAND_TIMEOUT_SECONDS", "10.0")
+        ),
+        tool_output_max_bytes=int(os.getenv("TOOL_OUTPUT_MAX_BYTES", "32000")),
+        tool_file_read_max_bytes=int(os.getenv("TOOL_FILE_READ_MAX_BYTES", "128000")),
     )

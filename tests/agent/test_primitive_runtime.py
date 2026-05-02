@@ -7,6 +7,8 @@ import pytest
 
 from simple_agent.agent import PrimitiveAgentRuntime
 from simple_agent.storage import Repository, SqliteDatabase
+from simple_agent.tools import build_default_tool_registry
+from simple_agent.workspace import WorkspaceManager
 
 
 @pytest.mark.anyio
@@ -16,11 +18,7 @@ async def test_primitive_runtime_completes_run_and_updates_task_tracker(
     repository = _repository(tmp_path)
     run = repository.create_run(external_task_id="PROJECT-1", status="queued")
     tracker = FakeTracker([_task("PROJECT-1")])
-    runtime = PrimitiveAgentRuntime(
-        repository=repository,
-        tracker=tracker,
-        agent_email="agent@example.com",
-    )
+    runtime = _runtime(repository=repository, tracker=tracker, tmp_path=tmp_path)
 
     result = await runtime.start_run(run)
 
@@ -32,15 +30,17 @@ async def test_primitive_runtime_completes_run_and_updates_task_tracker(
         "Примитивный runtime завершил stub-выполнение задачи без изменения кода.",
     ]
     events = repository.list_events_for_run(run.id)
-    assert [event.type for event in events] == [
-        "run.started",
-        "task.loaded",
-        "task.status_changed",
-        "task.comment_added",
-        "task.comment_added",
-        "task.status_changed",
-        "run.completed",
+    assert "workspace.prepared" in [event.type for event in events]
+    assert "tool.completed" in [event.type for event in events]
+    assert events[-1].type == "run.completed"
+    tool_calls = repository.list_tool_calls_for_run(run.id)
+    assert [tool_call.tool_name for tool_call in tool_calls] == [
+        "write_file",
+        "list_files",
+        "read_file",
+        "search_text",
     ]
+    assert all(tool_call.status == "completed" for tool_call in tool_calls)
 
 
 @pytest.mark.anyio
@@ -48,11 +48,7 @@ async def test_primitive_runtime_cancels_queued_run(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     run = repository.create_run(external_task_id="PROJECT-1", status="queued")
     tracker = FakeTracker([_task("PROJECT-1")])
-    runtime = PrimitiveAgentRuntime(
-        repository=repository,
-        tracker=tracker,
-        agent_email="agent@example.com",
-    )
+    runtime = _runtime(repository=repository, tracker=tracker, tmp_path=tmp_path)
 
     result = await runtime.cancel_run(run)
 
@@ -68,11 +64,7 @@ async def test_primitive_runtime_marks_run_failed_on_tracker_error(
     repository = _repository(tmp_path)
     run = repository.create_run(external_task_id="PROJECT-404", status="queued")
     tracker = FakeTracker([])
-    runtime = PrimitiveAgentRuntime(
-        repository=repository,
-        tracker=tracker,
-        agent_email="agent@example.com",
-    )
+    runtime = _runtime(repository=repository, tracker=tracker, tmp_path=tmp_path)
 
     result = await runtime.start_run(run)
 
@@ -85,6 +77,24 @@ def _repository(tmp_path: Path) -> Repository:
     database = SqliteDatabase(tmp_path / "runtime.sqlite3")
     database.initialize()
     return Repository(database)
+
+
+def _runtime(
+    *,
+    repository: Repository,
+    tracker: "FakeTracker",
+    tmp_path: Path,
+) -> PrimitiveAgentRuntime:
+    return PrimitiveAgentRuntime(
+        repository=repository,
+        tracker=tracker,
+        agent_email="agent@example.com",
+        workspace_manager=WorkspaceManager(root=tmp_path / "workspaces"),
+        tool_registry=build_default_tool_registry(),
+        command_timeout_seconds=2,
+        output_max_bytes=10_000,
+        file_read_max_bytes=10_000,
+    )
 
 
 def _task(task_id: str) -> dict[str, Any]:

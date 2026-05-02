@@ -11,6 +11,7 @@ from simple_agent.storage.models import (
     RunRecord,
     StatsRecord,
     TaskCandidateRecord,
+    ToolCallRecord,
 )
 from simple_agent.storage.sqlite import SqliteDatabase
 
@@ -307,6 +308,81 @@ class Repository:
             ).fetchall()
         return [_event_from_row(row) for row in rows]
 
+    def create_tool_call(
+        self,
+        *,
+        run_id: int,
+        tool_name: str,
+        input: dict[str, Any] | None = None,
+        status: str = "running",
+    ) -> ToolCallRecord:
+        with self.database.connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO tool_calls (run_id, tool_name, status, input_json)
+                VALUES (?, ?, ?, ?)
+                """,
+                (run_id, tool_name, status, _json_dumps(input)),
+            )
+            tool_call_id = int(cursor.lastrowid)
+
+        tool_call = self.get_tool_call(tool_call_id)
+        if tool_call is None:
+            raise RuntimeError("Created tool call was not found")
+        return tool_call
+
+    def complete_tool_call(
+        self,
+        tool_call_id: int,
+        *,
+        status: str,
+        output: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> ToolCallRecord:
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                UPDATE tool_calls
+                SET status = ?,
+                    output_json = ?,
+                    error = ?,
+                    finished_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                WHERE id = ?
+                """,
+                (status, _json_dumps(output), error, tool_call_id),
+            )
+
+        tool_call = self.get_tool_call(tool_call_id)
+        if tool_call is None:
+            raise RuntimeError("Updated tool call was not found")
+        return tool_call
+
+    def get_tool_call(self, tool_call_id: int) -> ToolCallRecord | None:
+        with self.database.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM tool_calls WHERE id = ?",
+                (tool_call_id,),
+            ).fetchone()
+        return _tool_call_from_row(row) if row else None
+
+    def list_tool_calls_for_run(
+        self,
+        run_id: int,
+        *,
+        limit: int = 100,
+    ) -> list[ToolCallRecord]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM tool_calls
+                WHERE run_id = ?
+                ORDER BY started_at ASC, id ASC
+                LIMIT ?
+                """,
+                (run_id, limit),
+            ).fetchall()
+        return [_tool_call_from_row(row) for row in rows]
+
     def get_stats(self) -> StatsRecord:
         with self.database.connect() as connection:
             ticks_total = _count(connection, "agent_ticks")
@@ -387,4 +463,18 @@ def _event_from_row(row: sqlite3.Row) -> EventRecord:
         message=str(row["message"]),
         payload=_json_loads(row["payload_json"]),
         created_at=_parse_datetime(row["created_at"]),
+    )
+
+
+def _tool_call_from_row(row: sqlite3.Row) -> ToolCallRecord:
+    return ToolCallRecord(
+        id=int(row["id"]),
+        run_id=int(row["run_id"]),
+        tool_name=str(row["tool_name"]),
+        status=str(row["status"]),
+        input=_json_loads(row["input_json"]),
+        output=_json_loads(row["output_json"]) if row["output_json"] is not None else None,
+        error=row["error"],
+        started_at=_parse_datetime(row["started_at"]),
+        finished_at=_parse_datetime(row["finished_at"]),
     )

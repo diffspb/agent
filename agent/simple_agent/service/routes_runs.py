@@ -5,9 +5,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from simple_agent.agent import AgentController, PrimitiveAgentRuntime, RunNotFoundError
 from simple_agent.config import Settings
 from simple_agent.service.dependencies import get_repository, get_settings
-from simple_agent.service.schemas import event_to_response, run_to_response
+from simple_agent.service.schemas import (
+    event_to_response,
+    run_to_response,
+    tool_call_to_response,
+)
 from simple_agent.storage import Repository
+from simple_agent.tools import build_default_tool_registry
 from simple_agent.tracker import TaskTrackerClient
+from simple_agent.workspace import WorkspaceManager
 
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
@@ -40,6 +46,20 @@ async def list_run_events(
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return [event_to_response(event) for event in repository.list_events_for_run(run_id)]
+
+
+@router.get("/{run_id}/tool-calls")
+async def list_run_tool_calls(
+    run_id: int,
+    repository: Annotated[Repository, Depends(get_repository)],
+) -> list[dict]:
+    run = repository.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return [
+        tool_call_to_response(tool_call)
+        for tool_call in repository.list_tool_calls_for_run(run_id)
+    ]
 
 
 @router.post("/{run_id}/start")
@@ -96,5 +116,10 @@ def _create_controller(
         repository=repository,
         tracker=tracker,
         agent_email=settings.agent_email,
+        workspace_manager=WorkspaceManager(root=settings.workspace_root),
+        tool_registry=build_default_tool_registry(),
+        command_timeout_seconds=settings.tool_command_timeout_seconds,
+        output_max_bytes=settings.tool_output_max_bytes,
+        file_read_max_bytes=settings.tool_file_read_max_bytes,
     )
     return AgentController(repository=repository, runtime=runtime)
