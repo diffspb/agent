@@ -1,15 +1,21 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
+import json
+from typing import Any
 
+from simple_agent.agent.artifacts import (
+    build_snapshot_diff,
+    capture_repo_snapshot,
+    write_artifact,
+)
 from simple_agent.agent.prompts import SYSTEM_PROMPT, build_task_prompt
 from simple_agent.llm import LLMClient, LLMToolCall
 from simple_agent.storage.models import RunRecord
 from simple_agent.storage.repository import Repository
 from simple_agent.tools import ToolContext, ToolError, ToolRegistry
 from simple_agent.tracker.client import TaskTrackerClient
-from simple_agent.workspace import WorkspaceManager
+from simple_agent.workspace import Workspace, WorkspaceManager
 
 
 RUN_STARTABLE_STATUSES = {"queued"}
@@ -21,7 +27,30 @@ class RuntimeResult:
     run: RunRecord
 
 
-class PrimitiveAgentRuntime:
+@dataclass(frozen=True)
+class RuntimeExecutionContext:
+    run: RunRecord
+    task: dict[str, Any]
+    workspace: Workspace
+    tool_context: ToolContext
+
+
+@dataclass(frozen=True)
+class CompletionReport:
+    outcome: str
+    final_comment: str
+    run_summary: str
+    task_status: str = "Done"
+    artifacts: list[str] | None = None
+    checks_summary: str | None = None
+
+
+class TaskLifecycleRuntime:
+    start_summary = "Runtime начал выполнение"
+    start_message = "Runtime начал выполнение задачи"
+    start_comment = "Агент начал выполнение задачи."
+    failed_summary = "Runtime завершился с ошибкой"
+
     def __init__(
         self,
         *,
@@ -50,115 +79,24 @@ class PrimitiveAgentRuntime:
         running = self.repository.update_run(
             run.id,
             status="running",
-            summary="Примитивный runtime начал выполнение",
+            summary=self.start_summary,
         )
         self.repository.add_event(
             run_id=run.id,
             tick_id=run.tick_id,
             type="run.started",
-            message="Примитивный runtime начал выполнение задачи",
+            message=self.start_message,
             payload={"external_task_id": run.external_task_id},
         )
 
         try:
-            task = await self.tracker.tasks_get(run.external_task_id)
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="task.loaded",
-                message="Задача загружена из таск-трекера",
-                payload={"external_task_id": task.get("id")},
-            )
-
-            workspace = self.workspace_manager.prepare_for_run(running)
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="workspace.prepared",
-                message="Рабочее пространство подготовлено",
-                payload={"workspace_root": str(workspace.root)},
-            )
-
-            await self.tracker.tasks_update(run.external_task_id, {"status": "InProgress"})
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="task.status_changed",
-                message="Задача переведена в InProgress",
-                payload={"status": "InProgress"},
-            )
-
-            await self.tracker.comments_add(
-                task_id=run.external_task_id,
-                author_email=self.agent_email,
-                body="Агент начал выполнение задачи.",
-            )
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="task.comment_added",
-                message="Добавлен комментарий о начале работы",
-            )
-
-            tool_context = ToolContext(
-                workspace=workspace,
-                command_timeout_seconds=self.command_timeout_seconds,
-                output_max_bytes=self.output_max_bytes,
-                file_read_max_bytes=self.file_read_max_bytes,
-            )
-            self._run_tool(
-                run=run,
-                name="write_file",
-                input={
-                    "path": "agent-run-summary.txt",
-                    "content": f"Stub workspace for {run.external_task_id}\n",
-                },
-                context=tool_context,
-            )
-            self._run_tool(
-                run=run,
-                name="list_files",
-                input={"path": "."},
-                context=tool_context,
-            )
-            self._run_tool(
-                run=run,
-                name="read_file",
-                input={"path": "agent-run-summary.txt"},
-                context=tool_context,
-            )
-            self._run_tool(
-                run=run,
-                name="search_text",
-                input={"path": ".", "query": run.external_task_id},
-                context=tool_context,
-            )
-
-            await self.tracker.comments_add(
-                task_id=run.external_task_id,
-                author_email=self.agent_email,
-                body="Примитивный runtime завершил stub-выполнение задачи без изменения кода.",
-            )
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="task.comment_added",
-                message="Добавлен комментарий о завершении работы",
-            )
-
-            await self.tracker.tasks_update(run.external_task_id, {"status": "Done"})
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="task.status_changed",
-                message="Задача переведена в Done",
-                payload={"status": "Done"},
-            )
-
+            context = await self._prepare_context(running)
+            report = await self.execute(context)
+            await self._complete_task(context, report)
             completed = self.repository.update_run(
                 run.id,
                 status="completed",
-                summary="Примитивный runtime завершил задачу",
+                summary=report.run_summary,
                 error=None,
                 finished=True,
             )
@@ -167,13 +105,15 @@ class PrimitiveAgentRuntime:
                 tick_id=run.tick_id,
                 type="run.completed",
                 message="Run завершен успешно",
+                payload={"outcome": report.outcome},
             )
             return RuntimeResult(run=completed)
         except Exception as exc:
+            await self._try_add_failure_comment(run, str(exc))
             failed = self.repository.update_run(
                 run.id,
                 status="failed",
-                summary="Примитивный runtime завершился с ошибкой",
+                summary=self.failed_summary,
                 error=str(exc),
                 finished=True,
             )
@@ -206,14 +146,111 @@ class PrimitiveAgentRuntime:
         )
         return RuntimeResult(run=cancelled)
 
+    async def execute(self, context: RuntimeExecutionContext) -> CompletionReport:
+        raise NotImplementedError
+
+    async def _prepare_context(self, run: RunRecord) -> RuntimeExecutionContext:
+        task = await self.tracker.tasks_get(run.external_task_id)
+        self.repository.add_event(
+            run_id=run.id,
+            tick_id=run.tick_id,
+            type="task.loaded",
+            message="Задача загружена из таск-трекера",
+            payload={"external_task_id": task.get("id")},
+        )
+
+        workspace = self.workspace_manager.prepare_for_run(run)
+        self.repository.add_event(
+            run_id=run.id,
+            tick_id=run.tick_id,
+            type="workspace.prepared",
+            message="Рабочее пространство подготовлено",
+            payload={"workspace_root": str(workspace.root)},
+        )
+
+        await self.tracker.tasks_update(run.external_task_id, {"status": "InProgress"})
+        self.repository.add_event(
+            run_id=run.id,
+            tick_id=run.tick_id,
+            type="task.status_changed",
+            message="Задача переведена в InProgress",
+            payload={"status": "InProgress"},
+        )
+
+        await self.tracker.comments_add(
+            task_id=run.external_task_id,
+            author_email=self.agent_email,
+            body=self.start_comment,
+        )
+        self.repository.add_event(
+            run_id=run.id,
+            tick_id=run.tick_id,
+            type="task.comment_added",
+            message="Добавлен комментарий о начале работы",
+        )
+
+        tool_context = ToolContext(
+            workspace=workspace,
+            command_timeout_seconds=self.command_timeout_seconds,
+            output_max_bytes=self.output_max_bytes,
+            file_read_max_bytes=self.file_read_max_bytes,
+        )
+        return RuntimeExecutionContext(
+            run=run,
+            task=task,
+            workspace=workspace,
+            tool_context=tool_context,
+        )
+
+    async def _complete_task(
+        self,
+        context: RuntimeExecutionContext,
+        report: CompletionReport,
+    ) -> None:
+        await self.tracker.comments_add(
+            task_id=context.run.external_task_id,
+            author_email=self.agent_email,
+            body=report.final_comment,
+        )
+        self.repository.add_event(
+            run_id=context.run.id,
+            tick_id=context.run.tick_id,
+            type="task.comment_added",
+            message="Добавлен итоговый комментарий runtime",
+        )
+        self.repository.add_event(
+            run_id=context.run.id,
+            tick_id=context.run.tick_id,
+            type="run.outcome",
+            message="Runtime сформировал результат выполнения",
+            payload={
+                "outcome": report.outcome,
+                "artifacts": report.artifacts or [],
+                "checks_summary": report.checks_summary,
+            },
+        )
+
+        await self.tracker.tasks_update(
+            context.run.external_task_id,
+            {"status": report.task_status},
+        )
+        self.repository.add_event(
+            run_id=context.run.id,
+            tick_id=context.run.tick_id,
+            type="task.status_changed",
+            message=f"Задача переведена в {report.task_status}",
+            payload={"status": report.task_status},
+        )
+
     def _run_tool(
         self,
         *,
         run: RunRecord,
         name: str,
-        input: dict,
+        input: dict[str, Any],
         context: ToolContext,
-    ) -> None:
+        raise_on_error: bool = True,
+    ) -> dict[str, Any]:
         tool_call = self.repository.create_tool_call(
             run_id=run.id,
             tool_name=name,
@@ -227,7 +264,16 @@ class PrimitiveAgentRuntime:
                 status="failed",
                 error=str(exc),
             )
-            raise
+            self.repository.add_event(
+                run_id=run.id,
+                tick_id=run.tick_id,
+                type="tool.failed",
+                message=f"Tool `{name}` завершился с ошибкой",
+                payload={"tool_call_id": tool_call.id, "tool_name": name},
+            )
+            if raise_on_error:
+                raise
+            return {"error": str(exc)}
 
         self.repository.complete_tool_call(
             tool_call.id,
@@ -241,9 +287,75 @@ class PrimitiveAgentRuntime:
             message=f"Tool `{name}` выполнен",
             payload={"tool_call_id": tool_call.id, "tool_name": name},
         )
+        return result.output
+
+    async def _try_add_failure_comment(self, run: RunRecord, error: str) -> None:
+        try:
+            await self.tracker.comments_add(
+                task_id=run.external_task_id,
+                author_email=self.agent_email,
+                body=f"Агент завершился с ошибкой: {error}",
+            )
+        except Exception:
+            self.repository.add_event(
+                run_id=run.id,
+                tick_id=run.tick_id,
+                type="task.comment_failed",
+                message="Не удалось добавить диагностический комментарий",
+                payload={"error": error},
+            )
 
 
-class LLMAgentRuntime:
+class PrimitiveAgentRuntime(TaskLifecycleRuntime):
+    start_summary = "Примитивный runtime начал выполнение"
+    start_message = "Примитивный runtime начал выполнение задачи"
+    start_comment = "Агент начал выполнение задачи."
+    failed_summary = "Примитивный runtime завершился с ошибкой"
+
+    async def execute(self, context: RuntimeExecutionContext) -> CompletionReport:
+        self._run_tool(
+            run=context.run,
+            name="write_file",
+            input={
+                "path": "agent-run-summary.txt",
+                "content": f"Stub workspace for {context.run.external_task_id}\n",
+            },
+            context=context.tool_context,
+        )
+        self._run_tool(
+            run=context.run,
+            name="list_files",
+            input={"path": "."},
+            context=context.tool_context,
+        )
+        self._run_tool(
+            run=context.run,
+            name="read_file",
+            input={"path": "agent-run-summary.txt"},
+            context=context.tool_context,
+        )
+        self._run_tool(
+            run=context.run,
+            name="search_text",
+            input={"path": ".", "query": context.run.external_task_id},
+            context=context.tool_context,
+        )
+        return CompletionReport(
+            outcome="workspace_artifact",
+            final_comment=(
+                "Примитивный runtime завершил stub-выполнение задачи без изменения кода."
+            ),
+            run_summary="Примитивный runtime завершил задачу",
+            task_status="Done",
+        )
+
+
+class LLMAgentRuntime(TaskLifecycleRuntime):
+    start_summary = "LLM runtime начал выполнение"
+    start_message = "LLM runtime начал выполнение задачи"
+    start_comment = "Агент начал выполнение задачи в LLM-режиме."
+    failed_summary = "LLM runtime завершился с ошибкой"
+
     def __init__(
         self,
         *,
@@ -258,167 +370,48 @@ class LLMAgentRuntime:
         output_max_bytes: int,
         file_read_max_bytes: int,
     ) -> None:
-        self.repository = repository
-        self.tracker = tracker
-        self.agent_email = agent_email
-        self.workspace_manager = workspace_manager
-        self.tool_registry = tool_registry
+        super().__init__(
+            repository=repository,
+            tracker=tracker,
+            agent_email=agent_email,
+            workspace_manager=workspace_manager,
+            tool_registry=tool_registry,
+            command_timeout_seconds=command_timeout_seconds,
+            output_max_bytes=output_max_bytes,
+            file_read_max_bytes=file_read_max_bytes,
+        )
         self.llm_client = llm_client
         self.max_steps = max_steps
-        self.command_timeout_seconds = command_timeout_seconds
-        self.output_max_bytes = output_max_bytes
-        self.file_read_max_bytes = file_read_max_bytes
 
-    async def start_run(self, run: RunRecord) -> RuntimeResult:
-        if run.status not in RUN_STARTABLE_STATUSES:
-            raise ValueError(f"Run cannot be started from status: {run.status}")
-
-        running = self.repository.update_run(
-            run.id,
-            status="running",
-            summary="LLM runtime начал выполнение",
+    async def execute(self, context: RuntimeExecutionContext) -> CompletionReport:
+        before = capture_repo_snapshot(
+            context.workspace,
+            max_file_bytes=self.file_read_max_bytes,
         )
-        self.repository.add_event(
-            run_id=run.id,
-            tick_id=run.tick_id,
-            type="run.started",
-            message="LLM runtime начал выполнение задачи",
-            payload={"external_task_id": run.external_task_id},
+        final_message = await self._run_llm_loop(
+            run=context.run,
+            task=context.task,
+            tool_context=context.tool_context,
         )
-
-        try:
-            task = await self.tracker.tasks_get(run.external_task_id)
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="task.loaded",
-                message="Задача загружена из таск-трекера",
-                payload={"external_task_id": task.get("id")},
-            )
-
-            workspace = self.workspace_manager.prepare_for_run(running)
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="workspace.prepared",
-                message="Рабочее пространство подготовлено",
-                payload={"workspace_root": str(workspace.root)},
-            )
-
-            await self.tracker.tasks_update(run.external_task_id, {"status": "InProgress"})
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="task.status_changed",
-                message="Задача переведена в InProgress",
-                payload={"status": "InProgress"},
-            )
-
-            await self.tracker.comments_add(
-                task_id=run.external_task_id,
-                author_email=self.agent_email,
-                body="Агент начал выполнение задачи в LLM-режиме.",
-            )
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="task.comment_added",
-                message="Добавлен комментарий о начале работы",
-            )
-
-            tool_context = ToolContext(
-                workspace=workspace,
-                command_timeout_seconds=self.command_timeout_seconds,
-                output_max_bytes=self.output_max_bytes,
-                file_read_max_bytes=self.file_read_max_bytes,
-            )
-            final_message = await self._run_llm_loop(
-                run=run,
-                task=task,
-                tool_context=tool_context,
-            )
-
-            await self.tracker.comments_add(
-                task_id=run.external_task_id,
-                author_email=self.agent_email,
-                body=final_message,
-            )
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="task.comment_added",
-                message="Добавлен итоговый комментарий LLM runtime",
-            )
-
-            await self.tracker.tasks_update(run.external_task_id, {"status": "Done"})
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="task.status_changed",
-                message="Задача переведена в Done",
-                payload={"status": "Done"},
-            )
-
-            completed = self.repository.update_run(
-                run.id,
-                status="completed",
-                summary="LLM runtime завершил задачу",
-                error=None,
-                finished=True,
-            )
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="run.completed",
-                message="Run завершен успешно",
-            )
-            return RuntimeResult(run=completed)
-        except Exception as exc:
-            await self._try_add_failure_comment(run, str(exc))
-            failed = self.repository.update_run(
-                run.id,
-                status="failed",
-                summary="LLM runtime завершился с ошибкой",
-                error=str(exc),
-                finished=True,
-            )
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="run.failed",
-                message="Run завершился с ошибкой",
-                payload={"error": str(exc)},
-            )
-            return RuntimeResult(run=failed)
-
-    async def cancel_run(self, run: RunRecord) -> RuntimeResult:
-        if run.status not in RUN_CANCELABLE_STATUSES:
-            raise ValueError(f"Run cannot be cancelled from status: {run.status}")
-
-        cancelled = self.repository.update_run(
-            run.id,
-            status="cancelled",
-            summary="Run отменен пользователем",
-            error=None,
-            finished=True,
+        after = capture_repo_snapshot(
+            context.workspace,
+            max_file_bytes=self.file_read_max_bytes,
         )
-        self.repository.add_event(
-            run_id=run.id,
-            tick_id=run.tick_id,
-            type="run.cancelled",
-            message="Run отменен пользователем",
-            payload={"external_task_id": run.external_task_id},
+        return self._build_completion_report(
+            context=context,
+            final_message=final_message,
+            before=before,
+            after=after,
         )
-        return RuntimeResult(run=cancelled)
 
     async def _run_llm_loop(
         self,
         *,
         run: RunRecord,
-        task: dict,
+        task: dict[str, Any],
         tool_context: ToolContext,
     ) -> str:
-        messages: list[dict] = [
+        messages: list[dict[str, Any]] = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": build_task_prompt(task)},
         ]
@@ -452,7 +445,13 @@ class LLMAgentRuntime:
                 break
 
             for call in response.tool_calls:
-                output = self._run_llm_tool(run=run, call=call, context=tool_context)
+                output = self._run_tool(
+                    run=run,
+                    name=call.name,
+                    input=call.arguments,
+                    context=tool_context,
+                    raise_on_error=False,
+                )
                 messages.append(
                     {
                         "role": "tool",
@@ -465,68 +464,51 @@ class LLMAgentRuntime:
             raise RuntimeError(f"LLM runtime exceeded max steps: {self.max_steps}")
         return final_message
 
-    def _run_llm_tool(
+    def _build_completion_report(
         self,
         *,
-        run: RunRecord,
-        call: LLMToolCall,
-        context: ToolContext,
-    ) -> dict:
-        tool_call = self.repository.create_tool_call(
-            run_id=run.id,
-            tool_name=call.name,
-            input=call.arguments,
-        )
-        try:
-            result = self.tool_registry.run(call.name, call.arguments, context)
-        except (ToolError, ValueError) as exc:
-            self.repository.complete_tool_call(
-                tool_call.id,
-                status="failed",
-                error=str(exc),
+        context: RuntimeExecutionContext,
+        final_message: str,
+        before: dict[str, str],
+        after: dict[str, str],
+    ) -> CompletionReport:
+        diff = build_snapshot_diff(before, after)
+        if not diff:
+            return CompletionReport(
+                outcome="answer_only",
+                final_comment=final_message,
+                run_summary="LLM runtime завершил задачу без изменений файлов",
+                task_status="Done",
+                checks_summary="Проверки не требовались: файлы не изменялись.",
             )
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="tool.failed",
-                message=f"Tool `{call.name}` завершился с ошибкой",
-                payload={"tool_call_id": tool_call.id, "tool_name": call.name},
-            )
-            return {"error": str(exc)}
 
-        self.repository.complete_tool_call(
-            tool_call.id,
-            status="completed",
-            output=result.output,
-        )
+        artifact = write_artifact(context.workspace, "final.diff", diff)
         self.repository.add_event(
-            run_id=run.id,
-            tick_id=run.tick_id,
-            type="tool.completed",
-            message=f"Tool `{call.name}` выполнен",
-            payload={"tool_call_id": tool_call.id, "tool_name": call.name},
+            run_id=context.run.id,
+            tick_id=context.run.tick_id,
+            type="artifact.created",
+            message="Создан diff-артефакт",
+            payload={"path": artifact.path, "bytes": artifact.bytes},
         )
-        return result.output
-
-    async def _try_add_failure_comment(self, run: RunRecord, error: str) -> None:
-        try:
-            await self.tracker.comments_add(
-                task_id=run.external_task_id,
-                author_email=self.agent_email,
-                body=f"Агент завершился с ошибкой: {error}",
-            )
-        except Exception:
-            self.repository.add_event(
-                run_id=run.id,
-                tick_id=run.tick_id,
-                type="task.comment_failed",
-                message="Не удалось добавить диагностический комментарий",
-                payload={"error": error},
-            )
+        checks_summary = _checks_summary(
+            self.repository.list_tool_calls_for_run(context.run.id)
+        )
+        return CompletionReport(
+            outcome="code_change",
+            final_comment=_format_code_change_comment(
+                final_message=final_message,
+                diff_path=artifact.path,
+                checks_summary=checks_summary,
+            ),
+            run_summary="LLM runtime завершил задачу с изменениями файлов",
+            task_status="InReview",
+            artifacts=[artifact.path],
+            checks_summary=checks_summary,
+        )
 
 
-def _assistant_message(content: str | None, tool_calls: list[LLMToolCall]) -> dict:
-    message: dict = {"role": "assistant", "content": content}
+def _assistant_message(content: str | None, tool_calls: list[LLMToolCall]) -> dict[str, Any]:
+    message: dict[str, Any] = {"role": "assistant", "content": content}
     if tool_calls:
         message["tool_calls"] = [
             {
@@ -540,3 +522,31 @@ def _assistant_message(content: str | None, tool_calls: list[LLMToolCall]) -> di
             for call in tool_calls
         ]
     return message
+
+
+def _checks_summary(tool_calls: list[Any]) -> str:
+    run_tests_calls = [call for call in tool_calls if call.tool_name == "run_tests"]
+    if not run_tests_calls:
+        return "Проверки не запускались: LLM runtime не вызвал run_tests."
+    failed = [call for call in run_tests_calls if call.status != "completed"]
+    if failed:
+        return "Проверки запускались, но часть вызовов run_tests завершилась ошибкой."
+    return "Проверки запускались через run_tests."
+
+
+def _format_code_change_comment(
+    *,
+    final_message: str,
+    diff_path: str,
+    checks_summary: str,
+) -> str:
+    return "\n".join(
+        [
+            final_message,
+            "",
+            "Итог выполнения:",
+            "- Тип результата: code_change",
+            f"- Diff-артефакт: {diff_path}",
+            f"- Проверки: {checks_summary}",
+        ]
+    )

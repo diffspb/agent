@@ -130,7 +130,11 @@ GET /api/runs
 GET /api/runs/{id}
 GET /api/runs/{id}/events
 GET /api/runs/{id}/tool-calls
+GET /api/runs/{id}/artifacts
+GET /api/runs/{id}/artifacts/{path}
 GET /api/stats
 ```
+
+Артефакты run не хранятся в SQLite. Они лежат в workspace конкретного run, а REST API читает их из каталога `artifacts`.
 
 Эти endpoints читают диагностическое состояние агента. Список актуальных задач должен читаться live из MCP-таск-трекера на следующих этапах, а не из локальной SQLite-БД.

@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Any
 
 from simple_agent.agent import TaskSelectionResult
+from simple_agent.agent.artifacts import Artifact
 from simple_agent.storage.models import (
     AgentTickRecord,
     EventRecord,
@@ -86,6 +87,14 @@ def tool_call_to_response(tool_call: ToolCallRecord) -> dict[str, Any]:
         "error": tool_call.error,
         "started_at": _format_datetime(tool_call.started_at),
         "finished_at": _format_datetime(tool_call.finished_at),
+    }
+
+
+def artifact_to_response(artifact: Artifact) -> dict[str, Any]:
+    return {
+        "path": artifact.path,
+        "name": artifact.name,
+        "bytes": artifact.bytes,
     }
 
 

@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from simple_agent.agent.artifacts import list_artifacts, read_artifact
 from simple_agent.agent import (
     AgentController,
     LLMAgentRuntime,
@@ -12,6 +13,7 @@ from simple_agent.config import Settings
 from simple_agent.llm import LiteLLMClient, StubLLMClient
 from simple_agent.service.dependencies import get_repository, get_settings
 from simple_agent.service.schemas import (
+    artifact_to_response,
     event_to_response,
     run_to_response,
     tool_call_to_response,
@@ -66,6 +68,39 @@ async def list_run_tool_calls(
         tool_call_to_response(tool_call)
         for tool_call in repository.list_tool_calls_for_run(run_id)
     ]
+
+
+@router.get("/{run_id}/artifacts")
+async def list_run_artifacts(
+    run_id: int,
+    repository: Annotated[Repository, Depends(get_repository)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> list[dict]:
+    run = repository.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    workspace = WorkspaceManager(root=settings.workspace_root).workspace_for_run(run)
+    return [artifact_to_response(artifact) for artifact in list_artifacts(workspace)]
+
+
+@router.get("/{run_id}/artifacts/{artifact_path:path}")
+async def get_run_artifact(
+    run_id: int,
+    artifact_path: str,
+    repository: Annotated[Repository, Depends(get_repository)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict:
+    run = repository.get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    workspace = WorkspaceManager(root=settings.workspace_root).workspace_for_run(run)
+    try:
+        content = read_artifact(workspace, artifact_path)
+    except (FileNotFoundError, IsADirectoryError):
+        raise HTTPException(status_code=404, detail="Artifact not found") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"path": artifact_path, "content": content}
 
 
 @router.post("/{run_id}/start")

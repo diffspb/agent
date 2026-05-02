@@ -42,20 +42,48 @@ async def test_llm_runtime_runs_tool_loop_and_completes_task(tmp_path: Path) -> 
     result = await runtime.start_run(run)
 
     assert result.run.status == "completed"
-    assert tracker.tasks["PROJECT-1"]["status"] == "Done"
-    assert [comment["body"] for comment in tracker.comments["PROJECT-1"]] == [
-        "Агент начал выполнение задачи в LLM-режиме.",
-        "Готово. Создан result.txt.",
-    ]
+    assert tracker.tasks["PROJECT-1"]["status"] == "InReview"
+    assert tracker.comments["PROJECT-1"][0]["body"] == (
+        "Агент начал выполнение задачи в LLM-режиме."
+    )
+    assert "Готово. Создан result.txt." in tracker.comments["PROJECT-1"][1]["body"]
+    assert "Diff-артефакт: final.diff" in tracker.comments["PROJECT-1"][1]["body"]
     events = repository.list_events_for_run(run.id)
     assert "llm.requested" in [event.type for event in events]
     assert "llm.responded" in [event.type for event in events]
+    assert "artifact.created" in [event.type for event in events]
     tool_calls = repository.list_tool_calls_for_run(run.id)
     assert [(call.tool_name, call.status) for call in tool_calls] == [
         ("write_file", "completed")
     ]
     assert len(llm.requests) == 2
     assert llm.requests[0]["tools"]
+    diff_path = tmp_path / "workspaces" / "run-1-PROJECT-1" / "artifacts" / "final.diff"
+    assert "result.txt" in diff_path.read_text(encoding="utf-8")
+
+
+@pytest.mark.anyio
+async def test_llm_runtime_can_complete_answer_only_task(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    run = repository.create_run(external_task_id="PROJECT-1", status="queued")
+    tracker = FakeTracker([_task("PROJECT-1")])
+    llm = StubLLMClient([LLMResponse(content="Ответ без изменения файлов.")])
+    runtime = _runtime(
+        repository=repository,
+        tracker=tracker,
+        tmp_path=tmp_path,
+        llm=llm,
+    )
+
+    result = await runtime.start_run(run)
+
+    assert result.run.status == "completed"
+    assert result.run.summary == "LLM runtime завершил задачу без изменений файлов"
+    assert tracker.tasks["PROJECT-1"]["status"] == "Done"
+    assert tracker.comments["PROJECT-1"][-1]["body"] == "Ответ без изменения файлов."
+    events = repository.list_events_for_run(run.id)
+    outcome_events = [event for event in events if event.type == "run.outcome"]
+    assert outcome_events[0].payload["outcome"] == "answer_only"
 
 
 @pytest.mark.anyio

@@ -44,15 +44,18 @@ class WorkspaceManager:
     def __init__(self, *, root: Path) -> None:
         self.root = root
 
-    def prepare_for_run(self, run: RunRecord) -> Workspace:
+    def workspace_for_run(self, run: RunRecord) -> Workspace:
         workspace_root = self.root / _workspace_name(run)
-        workspace = Workspace(
+        return Workspace(
             root=workspace_root,
             repo=workspace_root / "repo",
             artifacts=workspace_root / "artifacts",
             logs=workspace_root / "logs",
             scratch=workspace_root / "scratch",
         )
+
+    def prepare_for_run(self, run: RunRecord) -> Workspace:
+        workspace = self.workspace_for_run(run)
         for path in (
             workspace.root,
             workspace.repo,
