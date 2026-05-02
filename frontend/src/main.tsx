@@ -56,6 +56,12 @@ type ToolCall = {
   finished_at: string | null;
 };
 
+type RunArtifact = {
+  path: string;
+  name: string;
+  bytes: number;
+};
+
 type TaskCandidate = {
   id: number;
   tick_id: number;
@@ -97,6 +103,12 @@ function App() {
   const [toolCalls, setToolCalls] = useState<Loadable<ToolCall[]>>({
     status: "loading",
   });
+  const [artifacts, setArtifacts] = useState<Loadable<RunArtifact[]>>({
+    status: "loading",
+  });
+  const [artifactContent, setArtifactContent] = useState<Loadable<string>>({
+    status: "loading",
+  });
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [tickAction, setTickAction] = useState<
     { status: "idle" } | { status: "running" } | { status: "error"; message: string }
@@ -135,6 +147,8 @@ function App() {
     setCandidates({ status: "loading" });
     setEvents({ status: "loading" });
     setToolCalls({ status: "loading" });
+    setArtifacts({ status: "loading" });
+    setArtifactContent({ status: "loading" });
 
     const load = async <T,>(path: string): Promise<T> => {
       const response = await fetch(`${API_BASE_URL}${path}`);
@@ -159,16 +173,29 @@ function App() {
         : runsPayload[0];
       if (runForEvents) {
         setSelectedRunId(runForEvents.id);
-        const [eventsPayload, toolCallsPayload] = await Promise.all([
+        const [eventsPayload, toolCallsPayload, artifactsPayload] = await Promise.all([
           load<RunEvent[]>(`/api/runs/${runForEvents.id}/events`),
           load<ToolCall[]>(`/api/runs/${runForEvents.id}/tool-calls`),
+          load<RunArtifact[]>(`/api/runs/${runForEvents.id}/artifacts`),
         ]);
         setEvents({ status: "ok", data: eventsPayload });
         setToolCalls({ status: "ok", data: toolCallsPayload });
+        setArtifacts({ status: "ok", data: artifactsPayload });
+        const diffArtifact = artifactsPayload.find((artifact) => artifact.path === "final.diff");
+        if (diffArtifact) {
+          const artifactPayload = await load<{ content: string }>(
+            `/api/runs/${runForEvents.id}/artifacts/${encodeURIComponent(diffArtifact.path)}`,
+          );
+          setArtifactContent({ status: "ok", data: artifactPayload.content });
+        } else {
+          setArtifactContent({ status: "ok", data: "" });
+        }
       } else {
         setSelectedRunId(null);
         setEvents({ status: "ok", data: [] });
         setToolCalls({ status: "ok", data: [] });
+        setArtifacts({ status: "ok", data: [] });
+        setArtifactContent({ status: "ok", data: "" });
       }
       if (ticksPayload.length > 0) {
         const candidatesPayload = await load<TaskCandidate[]>(
@@ -186,6 +213,8 @@ function App() {
       setCandidates({ status: "error", message });
       setEvents({ status: "error", message });
       setToolCalls({ status: "error", message });
+      setArtifacts({ status: "error", message });
+      setArtifactContent({ status: "error", message });
     }
   }
 
@@ -408,7 +437,7 @@ function App() {
                     <tr
                       key={run.id}
                       className={run.id === selectedRunId ? "selected-row" : undefined}
-                      onClick={() => setSelectedRunId(run.id)}
+                      onClick={() => void loadDashboard(run.id)}
                     >
                       <td>{run.id}</td>
                       <td>{run.tick_id ?? "-"}</td>
@@ -526,6 +555,45 @@ function App() {
             </div>
           ) : (
             <p className="muted">Вызовов tools выбранного run пока нет.</p>
+          ))}
+      </section>
+
+      <section className="panel">
+        <h2>Артефакты run</h2>
+        {artifacts.status === "loading" && <p className="muted">Загрузка...</p>}
+        {artifacts.status === "error" && (
+          <p className="status-error">Ошибка: {artifacts.message}</p>
+        )}
+        {artifacts.status === "ok" &&
+          (artifacts.data.length > 0 ? (
+            <>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Файл</th>
+                      <th>Размер</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {artifacts.data.map((artifact) => (
+                      <tr key={artifact.path}>
+                        <td>{artifact.path}</td>
+                        <td>{artifact.bytes}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {artifactContent.status === "ok" && artifactContent.data && (
+                <pre className="artifact-preview">{artifactContent.data}</pre>
+              )}
+              {artifactContent.status === "error" && (
+                <p className="status-error">Ошибка чтения артефакта: {artifactContent.message}</p>
+              )}
+            </>
+          ) : (
+            <p className="muted">Артефактов выбранного run пока нет.</p>
           ))}
       </section>
 

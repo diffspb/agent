@@ -79,12 +79,18 @@ async def test_run_start_endpoint_supports_llm_stub_mode(tmp_path: Path) -> None
         response = await client.post(f"/api/runs/{run.id}/start")
         events_response = await client.get(f"/api/runs/{run.id}/events")
         tool_calls_response = await client.get(f"/api/runs/{run.id}/tool-calls")
+        artifacts_response = await client.get(f"/api/runs/{run.id}/artifacts")
+        diff_response = await client.get(f"/api/runs/{run.id}/artifacts/final.diff")
 
     assert response.status_code == 200
     assert response.json()["status"] == "completed"
-    assert tracker.comments["PROJECT-1"][-1]["body"] == "Задача выполнена в stub-режиме LLM."
+    assert "Тип результата: code_change" in tracker.comments["PROJECT-1"][-1]["body"]
     assert "llm.responded" in [event["type"] for event in events_response.json()]
     assert tool_calls_response.json()[0]["tool_name"] == "write_file"
+    assert artifacts_response.status_code == 200
+    assert artifacts_response.json()[0]["path"] == "final.diff"
+    assert diff_response.status_code == 200
+    assert "llm-agent-summary.txt" in diff_response.json()["content"]
 
 
 @pytest.mark.anyio
