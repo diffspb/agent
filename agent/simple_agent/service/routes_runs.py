@@ -2,8 +2,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from simple_agent.agent import AgentController, PrimitiveAgentRuntime, RunNotFoundError
+from simple_agent.agent import (
+    AgentController,
+    LLMAgentRuntime,
+    PrimitiveAgentRuntime,
+    RunNotFoundError,
+)
 from simple_agent.config import Settings
+from simple_agent.llm import LiteLLMClient, StubLLMClient
 from simple_agent.service.dependencies import get_repository, get_settings
 from simple_agent.service.schemas import (
     event_to_response,
@@ -112,12 +118,52 @@ def _create_controller(
 ) -> AgentController:
     tracker_factory = request.app.state.task_tracker_factory
     tracker: TaskTrackerClient = tracker_factory()
+    tool_registry = build_default_tool_registry()
+    workspace_manager = WorkspaceManager(root=settings.workspace_root)
+    if settings.agent_runtime_mode == "llm":
+        runtime = LLMAgentRuntime(
+            repository=repository,
+            tracker=tracker,
+            agent_email=settings.agent_email,
+            workspace_manager=workspace_manager,
+            tool_registry=tool_registry,
+            llm_client=LiteLLMClient(
+                model=settings.llm_model,
+                api_base=settings.llm_base_url,
+                api_key=settings.llm_api_key,
+                timeout_seconds=settings.llm_timeout_seconds,
+            ),
+            max_steps=settings.llm_max_steps,
+            command_timeout_seconds=settings.tool_command_timeout_seconds,
+            output_max_bytes=settings.tool_output_max_bytes,
+            file_read_max_bytes=settings.tool_file_read_max_bytes,
+        )
+        return AgentController(repository=repository, runtime=runtime)
+    if settings.agent_runtime_mode == "llm_stub":
+        runtime = LLMAgentRuntime(
+            repository=repository,
+            tracker=tracker,
+            agent_email=settings.agent_email,
+            workspace_manager=workspace_manager,
+            tool_registry=tool_registry,
+            llm_client=StubLLMClient(),
+            max_steps=settings.llm_max_steps,
+            command_timeout_seconds=settings.tool_command_timeout_seconds,
+            output_max_bytes=settings.tool_output_max_bytes,
+            file_read_max_bytes=settings.tool_file_read_max_bytes,
+        )
+        return AgentController(repository=repository, runtime=runtime)
+    if settings.agent_runtime_mode != "primitive":
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unknown AGENT_RUNTIME_MODE: {settings.agent_runtime_mode}",
+        )
     runtime = PrimitiveAgentRuntime(
         repository=repository,
         tracker=tracker,
         agent_email=settings.agent_email,
-        workspace_manager=WorkspaceManager(root=settings.workspace_root),
-        tool_registry=build_default_tool_registry(),
+        workspace_manager=workspace_manager,
+        tool_registry=tool_registry,
         command_timeout_seconds=settings.tool_command_timeout_seconds,
         output_max_bytes=settings.tool_output_max_bytes,
         file_read_max_bytes=settings.tool_file_read_max_bytes,

@@ -35,3 +35,4 @@ NNNN-short-title.md
 - [0002. Ограничения разработки и локального запуска](0002-development-workflow-and-local-runtime.md)
 - [0003. MCP-эмулятор таск-трекера с JSON-состоянием](0003-mcp-task-tracker-emulator.md)
 - [0004. SQLite-хранилище через Repository Layer](0004-sqlite-storage-with-repository-layer.md)
+- [0005. LiteLLM как provider layer для LLM](0005-litellm-provider-layer.md)

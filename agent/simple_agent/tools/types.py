@@ -22,6 +22,13 @@ class ToolResult:
     output: JsonObject
 
 
+@dataclass(frozen=True)
+class ToolSpec:
+    name: str
+    description: str
+    input_schema: JsonObject
+
+
 class Tool(Protocol):
     name: str
 

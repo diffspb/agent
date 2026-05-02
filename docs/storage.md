@@ -89,7 +89,7 @@ SIMPLE_AGENT_DB_PATH
 - `id` — идентификатор события.
 - `tick_id` — ссылка на tick, если событие относится к выбору/обработке tick.
 - `run_id` — ссылка на run, если событие относится к выполнению задачи.
-- `type` — тип события, например `tick.started`, `task.selected`, `run.finished`.
+- `type` — тип события, например `tick.started`, `task.selected`, `llm.requested`, `tool.completed`, `run.completed`.
 - `message` — короткое сообщение.
 - `payload_json` — структурированная диагностическая нагрузка.
 

@@ -62,6 +62,30 @@ make run-agent \
   TOOL_COMMAND_TIMEOUT_SECONDS=10
 ```
 
+Режим runtime выбирается через `AGENT_RUNTIME_MODE`:
+
+- `primitive` — режим по умолчанию, детерминированный runtime без LLM;
+- `llm_stub` — LLM-цикл со stub-клиентом без реального токена;
+- `llm` — LLM-цикл через LiteLLM.
+
+Пример запуска stub LLM-режима:
+
+```bash
+make run-agent AGENT_RUNTIME_MODE=llm_stub
+```
+
+Пример запуска через LiteLLM:
+
+```bash
+make run-agent \
+  AGENT_RUNTIME_MODE=llm \
+  LLM_MODEL=openai/gpt-5-mini \
+  LLM_API_KEY=... \
+  LLM_BASE_URL=...
+```
+
+Если провайдер LiteLLM не требует `LLM_BASE_URL`, переменную можно не задавать.
+
 ASGI-приложение для прямого запуска uvicorn находится в `simple_agent.service.asgi:app`. При прямом запуске из корня репозитория задайте `PYTHONPATH=agent:emulator`.
 
 Сбросить локальную базу:
@@ -102,7 +126,7 @@ curl --noproxy "*" \
   -d '{"task_id":"PROJECT-1","event":"task.updated"}'
 ```
 
-Запустить выбранный run примитивным runtime:
+Запустить выбранный run текущим runtime:
 
 ```bash
 curl --noproxy "*" \
