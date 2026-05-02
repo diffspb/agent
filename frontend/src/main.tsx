@@ -89,7 +89,7 @@ type Stats = {
   tool_calls_total: number;
 };
 
-function App() {
+export function App() {
   const [health, setHealth] = useState<HealthState>({ status: "loading" });
   const [ticks, setTicks] = useState<Loadable<AgentTick[]>>({ status: "loading" });
   const [runs, setRuns] = useState<Loadable<Run[]>>({ status: "loading" });
@@ -651,8 +651,10 @@ function compactJson(value: unknown) {
   return text.length > 90 ? `${text.slice(0, 90)}...` : text;
 }
 
-createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+if (!import.meta.env.TEST) {
+  createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
+}

@@ -25,6 +25,7 @@ LLM_API_KEY ?=
 LLM_MODEL ?= openai/gpt-5-mini
 LLM_MAX_STEPS ?= 6
 LLM_TIMEOUT_SECONDS ?= 60
+NPM_CONFIG_CACHE ?= .data/npm-cache
 
 .PHONY: help install run-agent reset-db test check generate-mcp-docs \
 	frontend-install frontend-dev frontend-build frontend-preview frontend-test \
@@ -46,7 +47,7 @@ help:
 	@echo "  make frontend-dev     Запустить Vite dev-server"
 	@echo "  make frontend-build   Собрать frontend"
 	@echo "  make frontend-preview Запустить preview сборки"
-	@echo "  make frontend-test    Запустить frontend-тесты, когда они появятся"
+	@echo "  make frontend-test    Запустить frontend-тесты"
 	@echo ""
 	@echo "Переменные:"
 	@echo "  DB_PATH=$(DB_PATH)"
@@ -61,6 +62,7 @@ help:
 	@echo "  WORKSPACE_ROOT=$(WORKSPACE_ROOT)"
 	@echo "  AGENT_RUNTIME_MODE=$(AGENT_RUNTIME_MODE)"
 	@echo "  LLM_MODEL=$(LLM_MODEL)"
+	@echo "  NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE)"
 	@echo "  PYTHONPATH=$(PYTHONPATH)"
 
 install:
@@ -87,20 +89,16 @@ test:
 check: test frontend-build
 
 frontend-install:
-	npm --prefix frontend install
+	NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm --prefix frontend install
 
 frontend-dev:
-	npm --prefix frontend run dev -- --host "$(BACKEND_HOST)" --port "$(FRONTEND_PORT)"
+	NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm --prefix frontend run dev -- --host "$(BACKEND_HOST)" --port "$(FRONTEND_PORT)"
 
 frontend-build:
-	npm --prefix frontend run build
+	NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm --prefix frontend run build
 
 frontend-preview:
-	npm --prefix frontend run preview -- --host "$(BACKEND_HOST)" --port "$(FRONTEND_PORT)"
+	NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm --prefix frontend run preview -- --host "$(BACKEND_HOST)" --port "$(FRONTEND_PORT)"
 
 frontend-test:
-	@if npm --prefix frontend run | grep -q '^  test'; then \
-		npm --prefix frontend test; \
-	else \
-		echo "Frontend-тесты пока не настроены (см. TD-009). Сейчас используйте make frontend-build."; \
-	fi
+	NPM_CONFIG_CACHE="$(NPM_CONFIG_CACHE)" npm --prefix frontend test

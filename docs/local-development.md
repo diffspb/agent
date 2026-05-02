@@ -198,6 +198,14 @@ make reset-task-tracker
 make test
 ```
 
+Frontend-тесты запускаются через Vitest:
+
+```bash
+make frontend-test
+```
+
+Ручной smoke-сценарий описан в [ручном smoke-тесте](manual-smoke.md).
+
 ## Frontend
 
 Установить зависимости:

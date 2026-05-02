@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from simple_agent.tools import ToolContext, ToolError, build_default_tool_registry
+from simple_agent.tools.registry import TOOL_SPECS
 from simple_agent.workspace import Workspace
 
 
@@ -49,6 +50,18 @@ def test_run_command_times_out(tmp_path: Path) -> None:
             {"command": ["python", "-c", "import time; time.sleep(1)"], "cwd": "."},
             context,
         )
+
+
+def test_all_default_tools_have_llm_metadata() -> None:
+    registry = build_default_tool_registry()
+    tools = registry.to_llm_tools()
+
+    assert set(registry.names) == set(TOOL_SPECS)
+    assert [tool["function"]["name"] for tool in tools] == registry.names
+    for tool in tools:
+        function = tool["function"]
+        assert function["description"]
+        assert function["parameters"]["type"] == "object"
 
 
 def _context(tmp_path: Path, *, timeout: float = 2) -> ToolContext:

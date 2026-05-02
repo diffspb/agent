@@ -87,6 +87,107 @@ async def test_llm_runtime_can_complete_answer_only_task(tmp_path: Path) -> None
 
 
 @pytest.mark.anyio
+async def test_llm_runtime_continues_after_tool_error(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    run = repository.create_run(external_task_id="PROJECT-1", status="queued")
+    tracker = FakeTracker([_task("PROJECT-1")])
+    llm = StubLLMClient(
+        [
+            LLMResponse(
+                tool_calls=[
+                    LLMToolCall(
+                        id="call-1",
+                        name="read_file",
+                        arguments={"path": "missing.txt"},
+                    )
+                ],
+            ),
+            LLMResponse(content="Файл отсутствует, дополнительных действий не требуется."),
+        ]
+    )
+    runtime = _runtime(
+        repository=repository,
+        tracker=tracker,
+        tmp_path=tmp_path,
+        llm=llm,
+    )
+
+    result = await runtime.start_run(run)
+
+    assert result.run.status == "completed"
+    assert tracker.tasks["PROJECT-1"]["status"] == "Done"
+    tool_calls = repository.list_tool_calls_for_run(run.id)
+    assert [(call.tool_name, call.status) for call in tool_calls] == [
+        ("read_file", "failed")
+    ]
+    assert "File not found" in (tool_calls[0].error or "")
+
+
+@pytest.mark.anyio
+async def test_llm_runtime_runs_multiple_tool_calls_in_one_step(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    run = repository.create_run(external_task_id="PROJECT-1", status="queued")
+    tracker = FakeTracker([_task("PROJECT-1")])
+    llm = StubLLMClient(
+        [
+            LLMResponse(
+                tool_calls=[
+                    LLMToolCall(
+                        id="call-1",
+                        name="write_file",
+                        arguments={"path": "one.txt", "content": "one\n"},
+                    ),
+                    LLMToolCall(
+                        id="call-2",
+                        name="write_file",
+                        arguments={"path": "two.txt", "content": "two\n"},
+                    ),
+                ],
+            ),
+            LLMResponse(content="Созданы два файла."),
+        ]
+    )
+    runtime = _runtime(
+        repository=repository,
+        tracker=tracker,
+        tmp_path=tmp_path,
+        llm=llm,
+    )
+
+    result = await runtime.start_run(run)
+
+    assert result.run.status == "completed"
+    tool_calls = repository.list_tool_calls_for_run(run.id)
+    assert [(call.tool_name, call.status) for call in tool_calls] == [
+        ("write_file", "completed"),
+        ("write_file", "completed"),
+    ]
+    diff_path = tmp_path / "workspaces" / "run-1-PROJECT-1" / "artifacts" / "final.diff"
+    diff = diff_path.read_text(encoding="utf-8")
+    assert "one.txt" in diff
+    assert "two.txt" in diff
+
+
+@pytest.mark.anyio
+async def test_llm_runtime_handles_empty_final_response(tmp_path: Path) -> None:
+    repository = _repository(tmp_path)
+    run = repository.create_run(external_task_id="PROJECT-1", status="queued")
+    tracker = FakeTracker([_task("PROJECT-1")])
+    llm = StubLLMClient([LLMResponse()])
+    runtime = _runtime(
+        repository=repository,
+        tracker=tracker,
+        tmp_path=tmp_path,
+        llm=llm,
+    )
+
+    result = await runtime.start_run(run)
+
+    assert result.run.status == "completed"
+    assert tracker.comments["PROJECT-1"][-1]["body"] == "LLM runtime завершил задачу."
+
+
+@pytest.mark.anyio
 async def test_llm_runtime_fails_after_step_limit(tmp_path: Path) -> None:
     repository = _repository(tmp_path)
     run = repository.create_run(external_task_id="PROJECT-1", status="queued")

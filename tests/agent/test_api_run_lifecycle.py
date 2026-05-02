@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 
 from simple_agent.config import Settings
 from simple_agent.service.app import create_app
+from simple_agent.workspace import WorkspaceManager
 
 
 @pytest.mark.anyio
@@ -85,7 +86,16 @@ async def test_run_start_endpoint_supports_llm_stub_mode(tmp_path: Path) -> None
     assert response.status_code == 200
     assert response.json()["status"] == "completed"
     assert "Тип результата: code_change" in tracker.comments["PROJECT-1"][-1]["body"]
-    assert "llm.responded" in [event["type"] for event in events_response.json()]
+    events = events_response.json()
+    assert "llm.responded" in [event["type"] for event in events]
+    outcome_events = [event for event in events if event["type"] == "run.outcome"]
+    assert len(outcome_events) == 1
+    assert outcome_events[0]["message"] == "Runtime сформировал результат выполнения"
+    assert outcome_events[0]["payload"] == {
+        "outcome": "code_change",
+        "artifacts": ["final.diff"],
+        "checks_summary": "Проверки не запускались: LLM runtime не вызвал run_tests.",
+    }
     assert tool_calls_response.json()[0]["tool_name"] == "write_file"
     assert artifacts_response.status_code == 200
     assert artifacts_response.json()[0]["path"] == "final.diff"
@@ -110,6 +120,41 @@ async def test_run_start_endpoint_rejects_completed_run(tmp_path: Path) -> None:
         response = await client.post(f"/api/runs/{run.id}/start")
 
     assert response.status_code == 409
+
+
+@pytest.mark.anyio
+async def test_run_artifacts_endpoint_handles_empty_missing_and_invalid_paths(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(
+        database_path=tmp_path / "run-artifacts.sqlite3",
+        workspace_root=tmp_path / "workspaces",
+    )
+    app = create_app(settings)
+    repository = app.state.repository
+    run = repository.create_run(external_task_id="PROJECT-1", status="completed")
+    workspace = WorkspaceManager(root=settings.workspace_root).prepare_for_run(run)
+    (workspace.artifacts / "final.diff").write_text("diff\n", encoding="utf-8")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        list_response = await client.get(f"/api/runs/{run.id}/artifacts")
+        content_response = await client.get(f"/api/runs/{run.id}/artifacts/final.diff")
+        missing_artifact_response = await client.get(
+            f"/api/runs/{run.id}/artifacts/missing.diff"
+        )
+        missing_run_response = await client.get("/api/runs/999/artifacts")
+        traversal_response = await client.get(
+            f"/api/runs/{run.id}/artifacts/%2E%2E/secret.txt"
+        )
+
+    assert list_response.status_code == 200
+    assert list_response.json() == [{"path": "final.diff", "name": "final.diff", "bytes": 5}]
+    assert content_response.status_code == 200
+    assert content_response.json() == {"path": "final.diff", "content": "diff\n"}
+    assert missing_artifact_response.status_code == 404
+    assert missing_run_response.status_code == 404
+    assert traversal_response.status_code == 400
 
 
 def _task(task_id: str) -> dict[str, Any]:
