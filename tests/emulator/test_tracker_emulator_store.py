@@ -2,13 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from simple_agent.tracker_emulator.errors import InvalidPatchError, TaskNotFoundError
-from simple_agent.tracker_emulator.store import TaskTrackerStore
+from task_tracker_emulator.errors import InvalidPatchError, TaskNotFoundError
+from task_tracker_emulator.store import TaskTrackerStore
 
 
 def test_store_loads_workflow_and_lists_tasks(tmp_path: Path) -> None:
     store = TaskTrackerStore.load(
-        state_file=Path("seeds/task_tracker/simple-task.json"),
+        state_file=Path("datasets/task_tracker/simple-task.json"),
         snapshot_file=tmp_path / "snapshot.json",
     )
 
@@ -31,7 +31,7 @@ def test_store_loads_workflow_and_lists_tasks(tmp_path: Path) -> None:
 def test_store_updates_task_and_writes_snapshot(tmp_path: Path) -> None:
     snapshot_file = tmp_path / "snapshot.json"
     store = TaskTrackerStore.load(
-        state_file=Path("seeds/task_tracker/simple-task.json"),
+        state_file=Path("datasets/task_tracker/simple-task.json"),
         snapshot_file=snapshot_file,
     )
 
@@ -51,7 +51,7 @@ def test_store_updates_task_and_writes_snapshot(tmp_path: Path) -> None:
 
 def test_store_adds_and_lists_comments(tmp_path: Path) -> None:
     store = TaskTrackerStore.load(
-        state_file=Path("seeds/task_tracker/simple-task.json"),
+        state_file=Path("datasets/task_tracker/simple-task.json"),
         snapshot_file=tmp_path / "snapshot.json",
     )
 
@@ -69,7 +69,7 @@ def test_store_adds_and_lists_comments(tmp_path: Path) -> None:
 
 def test_store_reports_missing_tasks_and_invalid_patch(tmp_path: Path) -> None:
     store = TaskTrackerStore.load(
-        state_file=Path("seeds/task_tracker/simple-task.json"),
+        state_file=Path("datasets/task_tracker/simple-task.json"),
         snapshot_file=tmp_path / "snapshot.json",
     )
 

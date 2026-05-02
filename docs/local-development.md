@@ -28,6 +28,13 @@ source .venv/bin/activate
 python -m pip install -e ".[dev]"
 ```
 
+Python-код разнесен по двум пакетным корням:
+
+- `agent/simple_agent` — библиотека и FastAPI-сервис агента;
+- `emulator/task_tracker_emulator` — MCP-эмулятор таск-трекера.
+
+`pyproject.toml` устанавливает оба пакета. Makefile дополнительно задает `PYTHONPATH=agent:emulator` для локального запуска без лишней настройки окружения.
+
 ## Backend
 
 Запустить API:
@@ -53,7 +60,7 @@ make run-agent \
   TASK_TRACKER_MCP_TIMEOUT_SECONDS=30
 ```
 
-ASGI-приложение для прямого запуска uvicorn находится в `simple_agent.service.asgi:app`.
+ASGI-приложение для прямого запуска uvicorn находится в `simple_agent.service.asgi:app`. При прямом запуске из корня репозитория задайте `PYTHONPATH=agent:emulator`.
 
 Сбросить локальную базу:
 
@@ -127,7 +134,7 @@ make run-task-tracker
 По умолчанию эмулятор использует:
 
 ```text
-state: seeds/task_tracker/simple-task.json
+state: datasets/task_tracker/simple-task.json
 snapshot: .data/task-tracker-snapshot.json
 endpoint: http://127.0.0.1:8020/mcp
 ```
@@ -135,7 +142,7 @@ endpoint: http://127.0.0.1:8020/mcp
 Запустить другой сценарий:
 
 ```bash
-make run-task-tracker MCP_STATE_FILE=seeds/task_tracker/blocked-task.json
+make run-task-tracker MCP_STATE_FILE=datasets/task_tracker/blocked-task.json
 ```
 
 Сбросить snapshot:

@@ -426,65 +426,76 @@ class AgentController:
 16. Если произошла ошибка, опубликовать диагностику и обновить статус.
 ```
 
-## Предлагаемая Структура Пакета
+## Структура Репозитория
 
 ```text
-simple_agent/
-  agent/
-    task_selection.py
-    runtime.py
-    controller.py
-    state_machine.py
-    planner.py
-    prompts.py
-    types.py
+agent/
+  simple_agent/
+    agent/
+      task_selection.py
+      runtime.py
+      controller.py
+      state_machine.py
+      planner.py
+      prompts.py
+      types.py
 
-  llm/
-    base.py
-    openai_compatible.py
+    llm/
+      base.py
+      openai_compatible.py
 
-  tools/
-    registry.py
-    filesystem.py
-    shell.py
-    git.py
-    tests.py
-    task_tracker.py
+    tools/
+      registry.py
+      filesystem.py
+      shell.py
+      git.py
+      tests.py
+      task_tracker.py
 
-  tracker/
-    client.py
-    mcp_client.py
+    tracker/
+      client.py
+      mcp_client.py
 
-  workspace/
-    manager.py
+    workspace/
+      manager.py
 
-  storage/
-    models.py
-    repository.py
-    sqlite.py
+    storage/
+      models.py
+      repository.py
+      sqlite.py
 
-  service/
-    app.py
-    asgi.py
-    routes_agent.py
-    routes_ticks.py
-    routes_runs.py
-    routes_stats.py
-    schemas.py
+    service/
+      app.py
+      asgi.py
+      routes_agent.py
+      routes_ticks.py
+      routes_runs.py
+      routes_stats.py
+      schemas.py
 
-  tracker_emulator/
+    config.py
+    main.py
+
+emulator/
+  task_tracker_emulator/
     server.py
     models.py
-    storage.py
-    seed.py
+    store.py
+    main.py
 
-  config.py
-  main.py
+datasets/
+  task_tracker/
+    simple-task.json
+    blocked-task.json
 
 frontend/
   src/
   package.json
   vite.config.ts
+
+tests/
+  agent/
+  emulator/
 ```
 
 ## Открытые Вопросы

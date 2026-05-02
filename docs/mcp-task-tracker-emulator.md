@@ -28,8 +28,8 @@ make run-task-tracker
 Прямой запуск:
 
 ```bash
-simple-agent-task-tracker \
-  --state-file seeds/task_tracker/simple-task.json \
+PYTHONPATH=emulator python -m task_tracker_emulator.main \
+  --state-file datasets/task_tracker/simple-task.json \
   --snapshot-file .data/task-tracker-snapshot.json \
   --host 127.0.0.1 \
   --port 8020
@@ -266,8 +266,8 @@ blocked_by
 
 Подготовленные JSON-файлы:
 
-- `seeds/task_tracker/simple-task.json`: простая задача без связей.
-- `seeds/task_tracker/epic-and-task.json`: задача внутри эпика.
-- `seeds/task_tracker/blocked-task.json`: задача, заблокированная другой задачей.
-- `seeds/task_tracker/test-task.json`: тестовая задача.
-- `seeds/task_tracker/needs-info.json`: задача в статусе `NeedsInfo` с комментариями.
+- `datasets/task_tracker/simple-task.json`: простая задача без связей.
+- `datasets/task_tracker/epic-and-task.json`: задача внутри эпика.
+- `datasets/task_tracker/blocked-task.json`: задача, заблокированная другой задачей.
+- `datasets/task_tracker/test-task.json`: тестовая задача.
+- `datasets/task_tracker/needs-info.json`: задача в статусе `NeedsInfo` с комментариями.

@@ -7,12 +7,12 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
-from simple_agent.tracker_emulator.errors import (
+from task_tracker_emulator.errors import (
     DuplicateTaskError,
     InvalidPatchError,
     TaskNotFoundError,
 )
-from simple_agent.tracker_emulator.models import Comment, Task, TrackerState, Workflow, utc_now
+from task_tracker_emulator.models import Comment, Task, TrackerState, Workflow, utc_now
 
 
 MUTABLE_TASK_FIELDS = {
