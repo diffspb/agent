@@ -29,6 +29,12 @@ button:hover {
   background: #184c58;
 }
 
+button:disabled {
+  border-color: #8fa6b0;
+  background: #8fa6b0;
+  cursor: not-allowed;
+}
+
 .app-shell {
   width: min(1120px, calc(100vw - 32px));
   margin: 32px auto;
@@ -40,6 +46,13 @@ button:hover {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
+}
+
+.toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 h1,
@@ -176,6 +189,14 @@ td {
   .toolbar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .toolbar-actions {
+    justify-content: stretch;
+  }
+
+  .toolbar-actions button {
+    flex: 1 1 160px;
   }
 
   .dashboard-grid,

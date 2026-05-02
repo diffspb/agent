@@ -83,6 +83,30 @@ class Repository:
             ).fetchone()
         return _tick_from_row(row) if row else None
 
+    def complete_tick(
+        self,
+        tick_id: int,
+        *,
+        status: str,
+        error: str | None = None,
+    ) -> AgentTickRecord:
+        with self.database.connect() as connection:
+            connection.execute(
+                """
+                UPDATE agent_ticks
+                SET status = ?,
+                    finished_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+                    error = ?
+                WHERE id = ?
+                """,
+                (status, error, tick_id),
+            )
+
+        tick = self.get_tick(tick_id)
+        if tick is None:
+            raise RuntimeError("Updated tick was not found")
+        return tick
+
     def add_task_candidate(
         self,
         *,
@@ -188,6 +212,22 @@ class Repository:
             row = connection.execute(
                 "SELECT * FROM runs WHERE id = ?",
                 (run_id,),
+            ).fetchone()
+        return _run_from_row(row) if row else None
+
+    def get_active_run_for_task(self, external_task_id: str) -> RunRecord | None:
+        active_statuses = ("queued", "running")
+        placeholders = ", ".join("?" for _ in active_statuses)
+        with self.database.connect() as connection:
+            row = connection.execute(
+                f"""
+                SELECT * FROM runs
+                WHERE external_task_id = ?
+                  AND status IN ({placeholders})
+                ORDER BY started_at DESC, id DESC
+                LIMIT 1
+                """,
+                (external_task_id, *active_statuses),
             ).fetchone()
         return _run_from_row(row) if row else None
 

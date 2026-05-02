@@ -2,10 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from simple_agent.config import Settings, load_settings
+from simple_agent.service.routes_agent import router as agent_router
 from simple_agent.service.routes_runs import router as runs_router
 from simple_agent.service.routes_stats import router as stats_router
 from simple_agent.service.routes_ticks import router as ticks_router
 from simple_agent.storage import Repository, SqliteDatabase
+from simple_agent.tracker import McpTaskTrackerClient
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -13,7 +15,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title=app_settings.app_name)
     database = SqliteDatabase(app_settings.database_path)
     database.initialize()
+    app.state.settings = app_settings
     app.state.repository = Repository(database)
+    app.state.task_tracker_factory = lambda: McpTaskTrackerClient(
+        url=app_settings.task_tracker_mcp_url,
+        timeout_seconds=app_settings.task_tracker_mcp_timeout_seconds,
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=app_settings.cors_allow_origin_regex,
@@ -33,5 +40,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ticks_router)
     app.include_router(runs_router)
     app.include_router(stats_router)
+    app.include_router(agent_router)
 
     return app

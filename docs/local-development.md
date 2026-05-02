@@ -36,10 +36,21 @@ python -m pip install -e ".[dev]"
 make run-agent
 ```
 
+Backend по умолчанию слушает `http://127.0.0.1:8010`.
+
 По умолчанию backend использует SQLite-файл `.data/simple-agent.sqlite3`. Для отдельного файла можно задать:
 
 ```bash
 make run-agent DB_PATH=.data/dev.sqlite3
+```
+
+Настройки агента для подключения к MCP-трекеру:
+
+```bash
+make run-agent \
+  AGENT_EMAIL=agent@example.com \
+  TASK_TRACKER_MCP_URL=http://127.0.0.1:8020/mcp \
+  TASK_TRACKER_MCP_TIMEOUT_SECONDS=30
 ```
 
 ASGI-приложение для прямого запуска uvicorn находится в `simple_agent.service.asgi:app`.
@@ -64,8 +75,26 @@ curl --noproxy "*" http://127.0.0.1:8010/api/runs
 curl --noproxy "*" http://127.0.0.1:8010/api/stats
 ```
 
+Запустить ручной tick выбора задачи:
+
+```bash
+curl --noproxy "*" \
+  -X POST http://127.0.0.1:8010/api/agent/tick \
+  -H 'Content-Type: application/json' \
+  -d '{"source":"manual"}'
+```
+
+Webhook-вход таск-трекера:
+
+```bash
+curl --noproxy "*" \
+  -X POST http://127.0.0.1:8010/api/webhooks/task-tracker \
+  -H 'Content-Type: application/json' \
+  -d '{"task_id":"PROJECT-1","event":"task.updated"}'
+```
+
 В WSL или окружениях с proxy важно обходить proxy для локальных адресов. Для `curl` используйте `--noproxy "*"`.
-Для Python MCP-клиента используйте `NO_PROXY="*" no_proxy="*"` или точечный `NO_PROXY=127.0.0.1,localhost`.
+MCP-клиент агента в сервисе отключает использование proxy-переменных для своих HTTP-вызовов к MCP endpoint.
 
 ## MCP-Эмулятор Таск-Трекера
 

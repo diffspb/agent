@@ -11,6 +11,9 @@ MCP_HOST ?= 127.0.0.1
 MCP_PORT ?= 8020
 MCP_STATE_FILE ?= seeds/task_tracker/simple-task.json
 MCP_SNAPSHOT_FILE ?= .data/task-tracker-snapshot.json
+AGENT_EMAIL ?= agent@example.com
+TASK_TRACKER_MCP_URL ?= http://$(MCP_HOST):$(MCP_PORT)/mcp
+TASK_TRACKER_MCP_TIMEOUT_SECONDS ?= 30
 
 .PHONY: help install run-agent reset-db test check \
 	frontend-install frontend-dev frontend-build frontend-preview frontend-test \
@@ -41,12 +44,14 @@ help:
 	@echo "  MCP_PORT=$(MCP_PORT)"
 	@echo "  MCP_STATE_FILE=$(MCP_STATE_FILE)"
 	@echo "  MCP_SNAPSHOT_FILE=$(MCP_SNAPSHOT_FILE)"
+	@echo "  AGENT_EMAIL=$(AGENT_EMAIL)"
+	@echo "  TASK_TRACKER_MCP_URL=$(TASK_TRACKER_MCP_URL)"
 
 install:
 	$(PIP) install -e ".[dev]"
 
 run-agent:
-	SIMPLE_AGENT_DB_PATH="$(DB_PATH)" $(UVICORN) simple_agent.service.asgi:app --reload --host "$(BACKEND_HOST)" --port "$(BACKEND_PORT)"
+	SIMPLE_AGENT_DB_PATH="$(DB_PATH)" AGENT_EMAIL="$(AGENT_EMAIL)" TASK_TRACKER_MCP_URL="$(TASK_TRACKER_MCP_URL)" TASK_TRACKER_MCP_TIMEOUT_SECONDS="$(TASK_TRACKER_MCP_TIMEOUT_SECONDS)" $(UVICORN) simple_agent.service.asgi:app --reload --host "$(BACKEND_HOST)" --port "$(BACKEND_PORT)"
 
 reset-db:
 	rm -f "$(DB_PATH)" "$(DB_PATH)-shm" "$(DB_PATH)-wal"
