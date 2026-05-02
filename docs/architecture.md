@@ -452,6 +452,9 @@ agent/
       tests.py
       task_tracker.py
 
+    workspace/
+      manager.py
+
     tracker/
       client.py
       mcp_client.py

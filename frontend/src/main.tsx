@@ -44,6 +44,18 @@ type RunEvent = {
   created_at: string;
 };
 
+type ToolCall = {
+  id: number;
+  run_id: number;
+  tool_name: string;
+  status: string;
+  input: Record<string, unknown>;
+  output: Record<string, unknown> | null;
+  error: string | null;
+  started_at: string;
+  finished_at: string | null;
+};
+
 type TaskCandidate = {
   id: number;
   tick_id: number;
@@ -80,6 +92,9 @@ function App() {
     status: "loading",
   });
   const [events, setEvents] = useState<Loadable<RunEvent[]>>({
+    status: "loading",
+  });
+  const [toolCalls, setToolCalls] = useState<Loadable<ToolCall[]>>({
     status: "loading",
   });
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
@@ -119,6 +134,7 @@ function App() {
     setStats({ status: "loading" });
     setCandidates({ status: "loading" });
     setEvents({ status: "loading" });
+    setToolCalls({ status: "loading" });
 
     const load = async <T,>(path: string): Promise<T> => {
       const response = await fetch(`${API_BASE_URL}${path}`);
@@ -143,13 +159,16 @@ function App() {
         : runsPayload[0];
       if (runForEvents) {
         setSelectedRunId(runForEvents.id);
-        const eventsPayload = await load<RunEvent[]>(
-          `/api/runs/${runForEvents.id}/events`,
-        );
+        const [eventsPayload, toolCallsPayload] = await Promise.all([
+          load<RunEvent[]>(`/api/runs/${runForEvents.id}/events`),
+          load<ToolCall[]>(`/api/runs/${runForEvents.id}/tool-calls`),
+        ]);
         setEvents({ status: "ok", data: eventsPayload });
+        setToolCalls({ status: "ok", data: toolCallsPayload });
       } else {
         setSelectedRunId(null);
         setEvents({ status: "ok", data: [] });
+        setToolCalls({ status: "ok", data: [] });
       }
       if (ticksPayload.length > 0) {
         const candidatesPayload = await load<TaskCandidate[]>(
@@ -166,6 +185,7 @@ function App() {
       setStats({ status: "error", message });
       setCandidates({ status: "error", message });
       setEvents({ status: "error", message });
+      setToolCalls({ status: "error", message });
     }
   }
 
@@ -471,6 +491,45 @@ function App() {
       </section>
 
       <section className="panel">
+        <h2>Вызовы tools</h2>
+        {toolCalls.status === "loading" && <p className="muted">Загрузка...</p>}
+        {toolCalls.status === "error" && (
+          <p className="status-error">Ошибка: {toolCalls.message}</p>
+        )}
+        {toolCalls.status === "ok" &&
+          (toolCalls.data.length > 0 ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Время</th>
+                    <th>Tool</th>
+                    <th>Статус</th>
+                    <th>Вход</th>
+                    <th>Ошибка</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {toolCalls.data.map((toolCall) => (
+                    <tr key={toolCall.id}>
+                      <td>{formatDate(toolCall.started_at)}</td>
+                      <td>{toolCall.tool_name}</td>
+                      <td>{toolCall.status}</td>
+                      <td>
+                        <code>{compactJson(toolCall.input)}</code>
+                      </td>
+                      <td>{toolCall.error ?? "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted">Вызовов tools выбранного run пока нет.</p>
+          ))}
+      </section>
+
+      <section className="panel">
         <h2>Кандидаты последнего tick</h2>
         {candidates.status === "loading" && <p className="muted">Загрузка...</p>}
         {candidates.status === "error" && (
@@ -517,6 +576,11 @@ function formatDate(value: string) {
     dateStyle: "short",
     timeStyle: "medium",
   }).format(new Date(value));
+}
+
+function compactJson(value: unknown) {
+  const text = JSON.stringify(value);
+  return text.length > 90 ? `${text.slice(0, 90)}...` : text;
 }
 
 createRoot(document.getElementById("root")!).render(
