@@ -36,3 +36,4 @@ NNNN-short-title.md
 - [0003. MCP-эмулятор таск-трекера с JSON-состоянием](0003-mcp-task-tracker-emulator.md)
 - [0004. SQLite-хранилище через Repository Layer](0004-sqlite-storage-with-repository-layer.md)
 - [0005. LiteLLM как provider layer для LLM](0005-litellm-provider-layer.md)
+- [0006. Stateless бизнес-поведение с локальной наблюдаемостью](0006-stateless-business-behavior-with-local-observability.md)

@@ -10,7 +10,7 @@
 - [Ограничения разработки](development-constraints.md): git workflow, виртуальное окружение, локальный запуск, Docker, React/Vite UI и MCP-эмулятор.
 - [Локальный запуск](local-development.md): установка зависимостей, запуск backend, тестов и frontend без Docker.
 - [Ручной smoke-тест](manual-smoke.md): проверка полного локального контура через MCP-эмулятор, backend и UI.
-- [Хранилище сервиса](storage.md): SQLite-схема, repository layer и endpoints наблюдаемости.
+- [Хранилище наблюдаемости](storage.md): SQLite-схема, repository layer, endpoints наблюдаемости и границы stateless-поведения агента.
 - [MCP-эмулятор таск-трекера](mcp-task-tracker-emulator.md): модель задач, workflow, JSON-состояние и MCP API примитивного трекера.
 - [MCP tools таск-трекера](mcp-task-tracker-tools.md): сгенерированная человекочитаемая документация инструментов MCP-сервера.
 - [Выбор задачи агентом](task-selection.md): правила tick, фильтрации, приоритета, зависимостей и observability.
