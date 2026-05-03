@@ -120,25 +120,17 @@ async def test_run_start_endpoint_supports_llm_stub_mode(tmp_path: Path) -> None
     assert response.status_code == 200
     assert response.json()["status"] == "completed"
     assert "Тип результата: code_change" in tracker.comments["PROJECT-1"][-1]["body"]
-    assert tracker.tasks["PROJECT-1"]["status"] == "InReview"
     events = events_response.json()
     assert "llm.responded" in [event["type"] for event in events]
     outcome_events = [event for event in events if event["type"] == "run.outcome"]
     assert len(outcome_events) == 1
     assert outcome_events[0]["message"] == "Runtime сформировал результат выполнения"
-    assert outcome_events[0]["payload"]["outcome"] == "code_change"
-    assert outcome_events[0]["payload"]["artifacts"] == ["final.diff"]
-    assert (
-        outcome_events[0]["payload"]["checks_summary"]
-        == "Проверки не запускались: LLM runtime не вызвал run_tests."
-    )
-    assert "Задача выполнена в stub-режиме LLM." in outcome_events[0]["payload"]["final_comment"]
-    assert [tool_call["tool_name"] for tool_call in tool_calls_response.json()[:4]] == [
-        "workflow_get",
-        "tasks_update",
-        "comments_add",
-        "write_file",
-    ]
+    assert outcome_events[0]["payload"] == {
+        "outcome": "code_change",
+        "artifacts": ["final.diff"],
+        "checks_summary": "Проверки не запускались: LLM runtime не вызвал run_tests.",
+    }
+    assert tool_calls_response.json()[0]["tool_name"] == "write_file"
     assert artifacts_response.status_code == 200
     assert artifacts_response.json()[0]["path"] == "final.diff"
     assert diff_response.status_code == 200

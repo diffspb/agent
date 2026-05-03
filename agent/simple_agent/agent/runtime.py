@@ -41,7 +41,7 @@ class CompletionReport:
     outcome: str
     final_comment: str
     run_summary: str
-    task_status: str | None = "Done"
+    task_status: str = "Done"
     artifacts: list[str] | None = None
     checks_summary: str | None = None
 
@@ -240,8 +240,6 @@ class TaskLifecycleRuntime:
             command_timeout_seconds=self.command_timeout_seconds,
             output_max_bytes=self.output_max_bytes,
             file_read_max_bytes=self.file_read_max_bytes,
-            tracker=self.tracker,
-            agent_email=self.agent_email,
         )
         return RuntimeExecutionContext(
             run=current_run,
@@ -278,20 +276,19 @@ class TaskLifecycleRuntime:
             },
         )
 
-        if report.task_status is not None:
-            await self.tracker.tasks_update(
-                context.run.external_task_id,
-                {"status": report.task_status},
-            )
-            self.observability.add_event(
-                run_id=context.run.id,
-                tick_id=context.run.tick_id,
-                type="task.status_changed",
-                message=f"Задача переведена в {report.task_status}",
-                payload={"status": report.task_status},
-            )
+        await self.tracker.tasks_update(
+            context.run.external_task_id,
+            {"status": report.task_status},
+        )
+        self.observability.add_event(
+            run_id=context.run.id,
+            tick_id=context.run.tick_id,
+            type="task.status_changed",
+            message=f"Задача переведена в {report.task_status}",
+            payload={"status": report.task_status},
+        )
 
-    async def _run_tool(
+    def _run_tool(
         self,
         *,
         run: RunRecord,
@@ -306,7 +303,7 @@ class TaskLifecycleRuntime:
             input=input,
         )
         try:
-            result = await self.tool_registry.arun(name, input, context)
+            result = self.tool_registry.run(name, input, context)
         except (ToolError, ValueError) as exc:
             self.observability.complete_tool_call(
                 tool_call.id,
@@ -362,7 +359,7 @@ class PrimitiveAgentRuntime(TaskLifecycleRuntime):
     failed_summary = "Примитивный runtime завершился с ошибкой"
 
     async def execute(self, context: RuntimeExecutionContext) -> CompletionReport:
-        await self._run_tool(
+        self._run_tool(
             run=context.run,
             name="write_file",
             input={
@@ -371,19 +368,19 @@ class PrimitiveAgentRuntime(TaskLifecycleRuntime):
             },
             context=context.tool_context,
         )
-        await self._run_tool(
+        self._run_tool(
             run=context.run,
             name="list_files",
             input={"path": "."},
             context=context.tool_context,
         )
-        await self._run_tool(
+        self._run_tool(
             run=context.run,
             name="read_file",
             input={"path": "agent-run-summary.txt"},
             context=context.tool_context,
         )
-        await self._run_tool(
+        self._run_tool(
             run=context.run,
             name="search_text",
             input={"path": ".", "query": context.run.external_task_id},
@@ -431,68 +428,6 @@ class LLMAgentRuntime(TaskLifecycleRuntime):
         )
         self.llm_client = llm_client
         self.max_steps = max_steps
-
-    async def _prepare_context(
-        self,
-        run: RunRecord,
-        *,
-        task: dict[str, Any],
-    ) -> RuntimeExecutionContext:
-        self.observability.add_event(
-            run_id=run.id,
-            tick_id=run.tick_id,
-            type="task.loaded",
-            message="Задача загружена из таск-трекера",
-            payload={"external_task_id": task.get("id")},
-        )
-        workspace = self.workspace_manager.prepare_for_run(run)
-        current_run = run
-        branch_name = self.workspace_manager.branch_name_for_run(run)
-        if run.branch_name != branch_name:
-            current_run = self.observability.update_run(
-                run.id,
-                status=run.status,
-                branch_name=branch_name,
-            )
-        self.observability.add_event(
-            run_id=current_run.id,
-            tick_id=current_run.tick_id,
-            type="workspace.prepared",
-            message="Рабочее пространство подготовлено",
-            payload={"workspace_root": str(workspace.root), "branch_name": branch_name},
-        )
-        tool_context = ToolContext(
-            workspace=workspace,
-            command_timeout_seconds=self.command_timeout_seconds,
-            output_max_bytes=self.output_max_bytes,
-            file_read_max_bytes=self.file_read_max_bytes,
-            tracker=self.tracker,
-            agent_email=self.agent_email,
-        )
-        return RuntimeExecutionContext(
-            run=current_run,
-            task=task,
-            workspace=workspace,
-            tool_context=tool_context,
-        )
-
-    async def _complete_task(
-        self,
-        context: RuntimeExecutionContext,
-        report: CompletionReport,
-    ) -> None:
-        self.observability.add_event(
-            run_id=context.run.id,
-            tick_id=context.run.tick_id,
-            type="run.outcome",
-            message="Runtime сформировал результат выполнения",
-            payload={
-                "outcome": report.outcome,
-                "artifacts": report.artifacts or [],
-                "checks_summary": report.checks_summary,
-                "final_comment": report.final_comment,
-            },
-        )
 
     async def execute(self, context: RuntimeExecutionContext) -> CompletionReport:
         before = capture_repo_snapshot(
@@ -556,7 +491,7 @@ class LLMAgentRuntime(TaskLifecycleRuntime):
                 break
 
             for call in response.tool_calls:
-                output = await self._run_tool(
+                output = self._run_tool(
                     run=run,
                     name=call.name,
                     input=call.arguments,
@@ -594,7 +529,7 @@ class LLMAgentRuntime(TaskLifecycleRuntime):
                 outcome="answer_only",
                 final_comment=final_message,
                 run_summary="LLM runtime завершил задачу без изменений файлов",
-                task_status=None,
+                task_status="Done",
                 checks_summary="Проверки не требовались: файлы не изменялись.",
             )
 
@@ -617,7 +552,7 @@ class LLMAgentRuntime(TaskLifecycleRuntime):
                 checks_summary=checks_summary,
             ),
             run_summary="LLM runtime завершил задачу с изменениями файлов",
-            task_status=None,
+            task_status="InReview",
             artifacts=[artifact.path],
             checks_summary=checks_summary,
         )

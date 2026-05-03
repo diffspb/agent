@@ -25,26 +25,8 @@ class StubLLMClient:
 def _default_responses() -> list[LLMResponse]:
     return [
         LLMResponse(
-            content="Проверю workflow и отмечу начало работы.",
+            content="Подготовлю краткий файл-отчет в рабочем пространстве.",
             tool_calls=[
-                LLMToolCall(
-                    id="stub_workflow_get",
-                    name="workflow_get",
-                    arguments={},
-                ),
-                LLMToolCall(
-                    id="stub_task_start",
-                    name="tasks_update",
-                    arguments={"task_id": "PROJECT-1", "patch": {"status": "InProgress"}},
-                ),
-                LLMToolCall(
-                    id="stub_comment_start",
-                    name="comments_add",
-                    arguments={
-                        "task_id": "PROJECT-1",
-                        "body": "Агент начал выполнение задачи в LLM-режиме.",
-                    },
-                ),
                 LLMToolCall(
                     id="stub_write_summary",
                     name="write_file",
@@ -52,25 +34,7 @@ def _default_responses() -> list[LLMResponse]:
                         "path": "llm-agent-summary.txt",
                         "content": "Stub LLM runtime completed.\n",
                     },
-                ),
-            ],
-        ),
-        LLMResponse(
-            content="Задача выполнена в stub-режиме LLM.",
-            tool_calls=[
-                LLMToolCall(
-                    id="stub_comment_done",
-                    name="comments_add",
-                    arguments={
-                        "task_id": "PROJECT-1",
-                        "body": "Тип результата: code_change\nПроверки: Проверки не запускались: LLM runtime не вызвал run_tests.\nDiff-артефакт: final.diff\n\nЗадача выполнена в stub-режиме LLM.",
-                    },
-                ),
-                LLMToolCall(
-                    id="stub_task_done",
-                    name="tasks_update",
-                    arguments={"task_id": "PROJECT-1", "patch": {"status": "InReview"}},
-                ),
+                )
             ],
         ),
         LLMResponse(content="Задача выполнена в stub-режиме LLM."),

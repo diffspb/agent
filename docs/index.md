@@ -7,7 +7,6 @@
 ## Документы
 
 - [Архитектура](architecture.md): целевая архитектура MVP, компоненты, жизненный цикл выполнения и границы инструментов.
-- [Сборка prompt](prompt-assembly.md): слои системных правил, project profile, task context и дополнительных знаний.
 - [Ограничения разработки](development-constraints.md): git workflow, виртуальное окружение, локальный запуск, Docker, React/Vite UI и MCP-эмулятор.
 - [Локальный запуск](local-development.md): установка зависимостей, запуск backend, тестов и frontend без Docker.
 - [Ручной smoke-тест](manual-smoke.md): проверка полного локального контура через MCP-эмулятор, backend и UI.

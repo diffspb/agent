@@ -87,17 +87,7 @@ def test_all_default_tools_have_llm_metadata() -> None:
     registry = build_default_tool_registry()
     tools = registry.to_llm_tools()
 
-    assert set(registry.names) == {
-        "git_diff",
-        "git_status",
-        "list_files",
-        "patch_file",
-        "read_file",
-        "run_command",
-        "run_tests",
-        "search_text",
-        "write_file",
-    }
+    assert set(registry.names) == set(TOOL_SPECS)
     assert [tool["function"]["name"] for tool in tools] == registry.names
     for tool in tools:
         function = tool["function"]
@@ -117,40 +107,6 @@ def test_run_command_and_run_tests_schemas_accept_string_or_array() -> None:
     assert run_command_schema["oneOf"][1]["type"] == "array"
     assert run_tests_schema["oneOf"][0]["type"] == "string"
     assert run_tests_schema["oneOf"][1]["type"] == "array"
-
-
-@pytest.mark.anyio
-async def test_task_tracker_tools_call_tracker_from_context(tmp_path: Path) -> None:
-    registry = build_default_tool_registry(include_task_tracker_tools=True)
-    tracker = FakeTracker()
-    context = _context(tmp_path)
-    context = ToolContext(
-        workspace=context.workspace,
-        command_timeout_seconds=context.command_timeout_seconds,
-        output_max_bytes=context.output_max_bytes,
-        file_read_max_bytes=context.file_read_max_bytes,
-        tracker=tracker,
-        agent_email="agent@example.com",
-    )
-
-    workflow = await registry.arun("workflow_get", {}, context)
-    task = await registry.arun("tasks_get", {"task_id": "PROJECT-1"}, context)
-    await registry.arun(
-        "comments_add",
-        {"task_id": "PROJECT-1", "body": "Нужен комментарий."},
-        context,
-    )
-    await registry.arun(
-        "tasks_update",
-        {"task_id": "PROJECT-1", "patch": {"status": "InProgress"}},
-        context,
-    )
-    comments = await registry.arun("comments_list", {"task_id": "PROJECT-1"}, context)
-
-    assert workflow.output["statuses"] == ["Open", "InProgress", "Done"]
-    assert task.output["id"] == "PROJECT-1"
-    assert tracker.tasks["PROJECT-1"]["status"] == "InProgress"
-    assert comments.output["comments"][0]["body"] == "Нужен комментарий."
 
 
 def _context(tmp_path: Path, *, timeout: float = 2) -> ToolContext:
@@ -175,47 +131,3 @@ def _context(tmp_path: Path, *, timeout: float = 2) -> ToolContext:
         output_max_bytes=10_000,
         file_read_max_bytes=10_000,
     )
-
-
-class FakeTracker:
-    def __init__(self) -> None:
-        self.tasks = {
-            "PROJECT-1": {
-                "id": "PROJECT-1",
-                "status": "Open",
-                "assignee_email": "agent@example.com",
-            }
-        }
-        self.comments = {"PROJECT-1": []}
-
-    async def workflow_get(self) -> dict:
-        return {"statuses": ["Open", "InProgress", "Done"], "transitions": "any"}
-
-    async def tasks_get(self, task_id: str) -> dict:
-        return self.tasks[task_id]
-
-    async def tasks_list(
-        self,
-        *,
-        status: str | None = None,
-        assignee_email: str | None = None,
-    ) -> list[dict]:
-        return list(self.tasks.values())
-
-    async def tasks_update(self, task_id: str, patch: dict) -> dict:
-        self.tasks[task_id].update(patch)
-        return self.tasks[task_id]
-
-    async def comments_add(
-        self,
-        *,
-        task_id: str,
-        author_email: str,
-        body: str,
-    ) -> dict:
-        comment = {"author_email": author_email, "body": body}
-        self.comments[task_id].append(comment)
-        return comment
-
-    async def comments_list(self, task_id: str) -> list[dict]:
-        return self.comments[task_id]
