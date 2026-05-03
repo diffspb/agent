@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import tempfile
 from typing import Any
@@ -84,6 +85,7 @@ class TaskTrackerStore:
         self._tasks[id] = updated
         self._sync_state()
         self.write_snapshot()
+        self._print_task_dump(updated)
         return updated.model_dump(mode="json")
 
     def comments_add(self, *, task_id: str, author_email: str, body: str) -> dict[str, Any]:
@@ -98,6 +100,7 @@ class TaskTrackerStore:
         self._tasks[task_id] = updated
         self._sync_state()
         self.write_snapshot()
+        self._print_task_dump(updated)
         return comment.model_dump(mode="json")
 
     def comments_list(self, *, task_id: str) -> list[dict[str, Any]]:
@@ -120,4 +123,10 @@ class TaskTrackerStore:
     def _sync_state(self) -> None:
         self._state = self._state.model_copy(
             update={"tasks": sorted(self._tasks.values(), key=lambda task: task.id)}
+        )
+
+    def _print_task_dump(self, task: Task) -> None:
+        print(
+            json.dumps(task.model_dump(mode="json"), ensure_ascii=False, indent=2),
+            flush=True,
         )

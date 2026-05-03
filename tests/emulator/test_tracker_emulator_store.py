@@ -28,7 +28,7 @@ def test_store_loads_workflow_and_lists_tasks(tmp_path: Path) -> None:
     assert [task["id"] for task in tasks] == ["PROJECT-1"]
 
 
-def test_store_updates_task_and_writes_snapshot(tmp_path: Path) -> None:
+def test_store_updates_task_and_writes_snapshot(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     snapshot_file = tmp_path / "snapshot.json"
     store = TaskTrackerStore.load(
         state_file=Path("datasets/task_tracker/simple-task.json"),
@@ -47,9 +47,12 @@ def test_store_updates_task_and_writes_snapshot(tmp_path: Path) -> None:
     assert updated["metadata"] == {"last_run_id": "run-1"}
     assert snapshot_file.exists()
     assert "InProgress" in snapshot_file.read_text(encoding="utf-8")
+    output = capsys.readouterr().out
+    assert '"id": "PROJECT-1"' in output
+    assert '"status": "InProgress"' in output
 
 
-def test_store_adds_and_lists_comments(tmp_path: Path) -> None:
+def test_store_adds_and_lists_comments(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     store = TaskTrackerStore.load(
         state_file=Path("datasets/task_tracker/simple-task.json"),
         snapshot_file=tmp_path / "snapshot.json",
@@ -65,6 +68,9 @@ def test_store_adds_and_lists_comments(tmp_path: Path) -> None:
     assert comment["author_email"] == "agent@example.com"
     assert comment["body"] == "Начинаю работу."
     assert comments[-1]["id"] == comment["id"]
+    output = capsys.readouterr().out
+    assert '"id": "PROJECT-1"' in output
+    assert '"comments": [' in output
 
 
 def test_store_reports_missing_tasks_and_invalid_patch(tmp_path: Path) -> None:
