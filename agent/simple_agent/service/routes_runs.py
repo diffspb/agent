@@ -153,12 +153,12 @@ def _create_controller(
 ) -> AgentController:
     tracker_factory = request.app.state.task_tracker_factory
     tracker: TaskTrackerClient = tracker_factory()
-    tool_registry = build_default_tool_registry()
     workspace_manager = WorkspaceManager(
         root=settings.workspace_root,
         source_repo_root=settings.project_repo_root,
     )
     if settings.agent_runtime_mode == "llm":
+        tool_registry = build_default_tool_registry(include_task_tracker_tools=True)
         runtime = LLMAgentRuntime(
             observability=SqliteObservabilitySink(repository),
             tracker=tracker,
@@ -178,6 +178,7 @@ def _create_controller(
         )
         return AgentController(repository=repository, runtime=runtime)
     if settings.agent_runtime_mode == "llm_stub":
+        tool_registry = build_default_tool_registry(include_task_tracker_tools=True)
         runtime = LLMAgentRuntime(
             observability=SqliteObservabilitySink(repository),
             tracker=tracker,
@@ -201,7 +202,7 @@ def _create_controller(
         tracker=tracker,
         agent_email=settings.agent_email,
         workspace_manager=workspace_manager,
-        tool_registry=tool_registry,
+        tool_registry=build_default_tool_registry(),
         command_timeout_seconds=settings.tool_command_timeout_seconds,
         output_max_bytes=settings.tool_output_max_bytes,
         file_read_max_bytes=settings.tool_file_read_max_bytes,

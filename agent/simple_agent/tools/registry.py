@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from simple_agent.tools.filesystem import (
     ListFilesTool,
     PatchFileTool,
@@ -9,7 +11,22 @@ from simple_agent.tools.filesystem import (
 )
 from simple_agent.tools.git import GitDiffTool, GitStatusTool
 from simple_agent.tools.shell import RunCommandTool, RunTestsTool
-from simple_agent.tools.types import JsonObject, Tool, ToolContext, ToolResult, ToolSpec
+from simple_agent.tools.task_tracker import (
+    CommentsAddTool,
+    CommentsListTool,
+    TasksGetTool,
+    TasksListTool,
+    TasksUpdateTool,
+    WorkflowGetTool,
+)
+from simple_agent.tools.types import (
+    AsyncTool,
+    JsonObject,
+    Tool,
+    ToolContext,
+    ToolResult,
+    ToolSpec,
+)
 
 
 TOOL_SPECS = {
@@ -125,6 +142,75 @@ TOOL_SPECS = {
             "additionalProperties": False,
         },
     ),
+    "workflow_get": ToolSpec(
+        name="workflow_get",
+        description="Прочитать описание workflow таск-трекера через MCP.",
+        input_schema={
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+    ),
+    "tasks_get": ToolSpec(
+        name="tasks_get",
+        description="Получить задачу по идентификатору через MCP.",
+        input_schema={
+            "type": "object",
+            "properties": {"task_id": {"type": "string"}},
+            "required": ["task_id"],
+            "additionalProperties": False,
+        },
+    ),
+    "tasks_list": ToolSpec(
+        name="tasks_list",
+        description="Получить список задач через MCP с необязательными фильтрами по статусу и исполнителю.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "status": {"type": "string"},
+                "assignee_email": {"type": "string"},
+            },
+            "additionalProperties": False,
+        },
+    ),
+    "tasks_update": ToolSpec(
+        name="tasks_update",
+        description="Обновить задачу через MCP, например изменить статус, исполнителя или metadata.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+                "patch": {"type": "object"},
+            },
+            "required": ["task_id", "patch"],
+            "additionalProperties": False,
+        },
+    ),
+    "comments_add": ToolSpec(
+        name="comments_add",
+        description="Добавить комментарий к задаче через MCP от имени агента.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+                "body": {"type": "string"},
+            },
+            "required": ["task_id", "body"],
+            "additionalProperties": False,
+        },
+    ),
+    "comments_list": ToolSpec(
+        name="comments_list",
+        description="Получить список комментариев задачи через MCP.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string"},
+            },
+            "required": ["task_id"],
+            "additionalProperties": False,
+        },
+    ),
 }
 
 
@@ -158,18 +244,39 @@ class ToolRegistry:
             raise ValueError(f"Unknown tool: {name}")
         return tool.run(input, context)
 
+    async def arun(self, name: str, input: JsonObject, context: ToolContext) -> ToolResult:
+        tool = self._tools.get(name)
+        if tool is None:
+            raise ValueError(f"Unknown tool: {name}")
+        if hasattr(tool, "arun"):
+            return await cast(AsyncTool, tool).arun(input, context)
+        return cast(Tool, tool).run(input, context)
 
-def build_default_tool_registry() -> ToolRegistry:
-    return ToolRegistry(
-        [
-            ListFilesTool(),
-            ReadFileTool(),
-            WriteFileTool(),
-            PatchFileTool(),
-            SearchTextTool(),
-            RunCommandTool(),
-            RunTestsTool(),
-            GitStatusTool(),
-            GitDiffTool(),
-        ]
-    )
+
+def build_default_tool_registry(
+    *,
+    include_task_tracker_tools: bool = False,
+) -> ToolRegistry:
+    tools: list[Tool | AsyncTool] = [
+        ListFilesTool(),
+        ReadFileTool(),
+        WriteFileTool(),
+        PatchFileTool(),
+        SearchTextTool(),
+        RunCommandTool(),
+        RunTestsTool(),
+        GitStatusTool(),
+        GitDiffTool(),
+    ]
+    if include_task_tracker_tools:
+        tools.extend(
+            [
+                WorkflowGetTool(),
+                TasksGetTool(),
+                TasksListTool(),
+                TasksUpdateTool(),
+                CommentsAddTool(),
+                CommentsListTool(),
+            ]
+        )
+    return ToolRegistry(list(tools))

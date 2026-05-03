@@ -37,3 +37,4 @@ NNNN-short-title.md
 - [0004. SQLite-хранилище через Repository Layer](0004-sqlite-storage-with-repository-layer.md)
 - [0005. LiteLLM как provider layer для LLM](0005-litellm-provider-layer.md)
 - [0006. Stateless бизнес-поведение с локальной наблюдаемостью](0006-stateless-business-behavior-with-local-observability.md)
+- [0007. Project Profile и многослойная сборка prompt](0007-project-profile-and-prompt-assembly.md)
