@@ -221,6 +221,7 @@ class Repository:
         run_id: int,
         *,
         status: str,
+        branch_name: str | None = None,
         summary: str | None = None,
         error: str | None = None,
         finished: bool = False,
@@ -233,13 +234,14 @@ class Repository:
                 f"""
                 UPDATE runs
                 SET status = ?,
+                    branch_name = COALESCE(?, branch_name),
                     summary = COALESCE(?, summary),
                     error = ?,
                     finished_at = {finished_at_expression},
                     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
                 WHERE id = ?
                 """,
-                (status, summary, error, run_id),
+                (status, branch_name, summary, error, run_id),
             )
 
         run = self.get_run(run_id)

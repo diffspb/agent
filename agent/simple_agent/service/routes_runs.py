@@ -154,7 +154,10 @@ def _create_controller(
     tracker_factory = request.app.state.task_tracker_factory
     tracker: TaskTrackerClient = tracker_factory()
     tool_registry = build_default_tool_registry()
-    workspace_manager = WorkspaceManager(root=settings.workspace_root)
+    workspace_manager = WorkspaceManager(
+        root=settings.workspace_root,
+        source_repo_root=settings.project_repo_root,
+    )
     if settings.agent_runtime_mode == "llm":
         runtime = LLMAgentRuntime(
             observability=SqliteObservabilitySink(repository),

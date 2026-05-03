@@ -8,6 +8,7 @@ from simple_agent.agent.policies import decide_task_selection
 from simple_agent.storage.models import AgentTickRecord, RunRecord, TaskCandidateRecord
 from simple_agent.storage import ObservabilitySink
 from simple_agent.tracker.client import JsonObject, TaskTrackerClient
+from simple_agent.workspace import WorkspaceManager
 
 
 EXECUTABLE_TASK_TYPES = {"task", "test"}
@@ -47,10 +48,12 @@ class TaskSelectionService:
         observability: ObservabilitySink,
         tracker: TaskTrackerClient,
         agent_email: str,
+        workspace_manager: WorkspaceManager | None = None,
     ) -> None:
         self.observability = observability
         self.tracker = tracker
         self.agent_email = agent_email
+        self.workspace_manager = workspace_manager
 
     async def run_tick(
         self,
@@ -95,9 +98,29 @@ class TaskSelectionService:
             selected_task = selected.task if selected else None
             if selected_task is not None:
                 task_id = str(selected_task["id"])
+                branch_name = (
+                    self.workspace_manager.branch_name_for_run(
+                        RunRecord(
+                            id=0,
+                            tick_id=tick.id,
+                            external_task_id=task_id,
+                            branch_name=None,
+                            status="queued",
+                            started_at=tick.started_at,
+                            finished_at=None,
+                            summary=None,
+                            error=None,
+                            created_at=tick.started_at,
+                            updated_at=tick.started_at,
+                        )
+                    )
+                    if self.workspace_manager is not None
+                    else _default_branch_name(task_id)
+                )
                 selected_run = self.observability.create_run(
                     tick_id=tick.id,
                     external_task_id=task_id,
+                    branch_name=branch_name,
                     status="queued",
                     summary="Задача выбрана для выполнения",
                 )
@@ -382,3 +405,8 @@ def _task_sort_key(task_id: str) -> tuple[str, int, str]:
     if match is None:
         return (task_id, 0, task_id)
     return (match.group("project"), int(match.group("number")), task_id)
+
+
+def _default_branch_name(task_id: str) -> str:
+    sanitized = re.sub(r"[^A-Za-z0-9_.-]+", "-", task_id).strip("-")
+    return f"{sanitized or 'task'}-agent"

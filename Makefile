@@ -15,6 +15,7 @@ MCP_SNAPSHOT_FILE ?= .data/task-tracker-snapshot.json
 AGENT_EMAIL ?= agent@example.com
 TASK_TRACKER_MCP_URL ?= http://$(MCP_HOST):$(MCP_PORT)/mcp
 TASK_TRACKER_MCP_TIMEOUT_SECONDS ?= 30
+PROJECT_REPO_ROOT ?= .
 WORKSPACE_ROOT ?= .data/workspaces
 TOOL_COMMAND_TIMEOUT_SECONDS ?= 10
 TOOL_OUTPUT_MAX_BYTES ?= 32000
@@ -26,17 +27,20 @@ LLM_MODEL ?= openai/gpt-5-mini
 LLM_MAX_STEPS ?= 6
 LLM_TIMEOUT_SECONDS ?= 60
 NPM_CONFIG_CACHE ?= .data/npm-cache
+NO_PROXY ?=
 
 .PHONY: help install run-agent reset-db test check generate-mcp-docs \
 	frontend-install frontend-dev frontend-build frontend-preview frontend-test \
-	run-task-tracker reset-task-tracker
+	run-task-tracker reset-task-tracker run-agent-llm-local run-task-tracker-llm-local
 
 help:
 	@echo "Основные команды:"
 	@echo "  make install           Установить backend-зависимости в .venv"
 	@echo "  make run-agent        Запустить FastAPI-сервис агента"
+	@echo "  make run-agent-llm-local Запустить backend с LiteLLM и локальным LM Studio"
 	@echo "  make reset-db         Удалить локальную SQLite-базу"
 	@echo "  make run-task-tracker Запустить MCP-эмулятор таск-трекера"
+	@echo "  make run-task-tracker-llm-local Запустить MCP-эмулятор для live-теста с LM Studio"
 	@echo "  make reset-task-tracker Удалить snapshot MCP-эмулятора"
 	@echo "  make generate-mcp-docs Сгенерировать документацию MCP tools"
 	@echo "  make test             Запустить backend-тесты"
@@ -59,9 +63,11 @@ help:
 	@echo "  MCP_SNAPSHOT_FILE=$(MCP_SNAPSHOT_FILE)"
 	@echo "  AGENT_EMAIL=$(AGENT_EMAIL)"
 	@echo "  TASK_TRACKER_MCP_URL=$(TASK_TRACKER_MCP_URL)"
+	@echo "  PROJECT_REPO_ROOT=$(PROJECT_REPO_ROOT)"
 	@echo "  WORKSPACE_ROOT=$(WORKSPACE_ROOT)"
 	@echo "  AGENT_RUNTIME_MODE=$(AGENT_RUNTIME_MODE)"
 	@echo "  LLM_MODEL=$(LLM_MODEL)"
+	@echo "  NO_PROXY=$(NO_PROXY)"
 	@echo "  NPM_CONFIG_CACHE=$(NPM_CONFIG_CACHE)"
 	@echo "  PYTHONPATH=$(PYTHONPATH)"
 
@@ -69,13 +75,19 @@ install:
 	$(PIP) install -e ".[dev]"
 
 run-agent:
-	PYTHONPATH="$(PYTHONPATH)" SIMPLE_AGENT_DB_PATH="$(DB_PATH)" AGENT_EMAIL="$(AGENT_EMAIL)" TASK_TRACKER_MCP_URL="$(TASK_TRACKER_MCP_URL)" TASK_TRACKER_MCP_TIMEOUT_SECONDS="$(TASK_TRACKER_MCP_TIMEOUT_SECONDS)" WORKSPACE_ROOT="$(WORKSPACE_ROOT)" TOOL_COMMAND_TIMEOUT_SECONDS="$(TOOL_COMMAND_TIMEOUT_SECONDS)" TOOL_OUTPUT_MAX_BYTES="$(TOOL_OUTPUT_MAX_BYTES)" TOOL_FILE_READ_MAX_BYTES="$(TOOL_FILE_READ_MAX_BYTES)" AGENT_RUNTIME_MODE="$(AGENT_RUNTIME_MODE)" LLM_BASE_URL="$(LLM_BASE_URL)" LLM_API_KEY="$(LLM_API_KEY)" LLM_MODEL="$(LLM_MODEL)" LLM_MAX_STEPS="$(LLM_MAX_STEPS)" LLM_TIMEOUT_SECONDS="$(LLM_TIMEOUT_SECONDS)" $(UVICORN) simple_agent.service.asgi:app --reload --host "$(BACKEND_HOST)" --port "$(BACKEND_PORT)"
+	PYTHONPATH_VALUE="$(PYTHONPATH)" UVICORN_BIN="$(UVICORN)" DB_PATH="$(DB_PATH)" AGENT_EMAIL_VALUE="$(AGENT_EMAIL)" TASK_TRACKER_MCP_URL_VALUE="$(TASK_TRACKER_MCP_URL)" TASK_TRACKER_MCP_TIMEOUT_SECONDS_VALUE="$(TASK_TRACKER_MCP_TIMEOUT_SECONDS)" PROJECT_REPO_ROOT_VALUE="$(PROJECT_REPO_ROOT)" WORKSPACE_ROOT_VALUE="$(WORKSPACE_ROOT)" TOOL_COMMAND_TIMEOUT_SECONDS_VALUE="$(TOOL_COMMAND_TIMEOUT_SECONDS)" TOOL_OUTPUT_MAX_BYTES_VALUE="$(TOOL_OUTPUT_MAX_BYTES)" TOOL_FILE_READ_MAX_BYTES_VALUE="$(TOOL_FILE_READ_MAX_BYTES)" AGENT_RUNTIME_MODE_VALUE="$(AGENT_RUNTIME_MODE)" LLM_BASE_URL_VALUE="$(LLM_BASE_URL)" LLM_API_KEY_VALUE="$(LLM_API_KEY)" LLM_MODEL_VALUE="$(LLM_MODEL)" LLM_MAX_STEPS_VALUE="$(LLM_MAX_STEPS)" LLM_TIMEOUT_SECONDS_VALUE="$(LLM_TIMEOUT_SECONDS)" BACKEND_HOST_VALUE="$(BACKEND_HOST)" BACKEND_PORT_VALUE="$(BACKEND_PORT)" NO_PROXY_VALUE="$(NO_PROXY)" ./scripts/run_agent.sh
+
+run-agent-llm-local:
+	$(MAKE) run-agent AGENT_RUNTIME_MODE=llm LLM_BASE_URL=http://127.0.0.1:1234/v1 LLM_API_KEY=lm-studio LLM_MODEL=openai/qwen3.5-2b NO_PROXY=localhost,127.0.0.1
 
 reset-db:
 	rm -f "$(DB_PATH)" "$(DB_PATH)-shm" "$(DB_PATH)-wal"
 
 run-task-tracker:
 	PYTHONPATH="emulator" $(PYTHON) -m task_tracker_emulator.main --state-file "$(MCP_STATE_FILE)" --snapshot-file "$(MCP_SNAPSHOT_FILE)" --host "$(MCP_HOST)" --port "$(MCP_PORT)"
+
+run-task-tracker-llm-local:
+	$(MAKE) run-task-tracker MCP_PORT=8037 MCP_SNAPSHOT_FILE=.data/task-tracker-live-llm-noproxy.json
 
 reset-task-tracker:
 	rm -f "$(MCP_SNAPSHOT_FILE)"

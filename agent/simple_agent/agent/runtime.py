@@ -197,12 +197,20 @@ class TaskLifecycleRuntime:
         )
 
         workspace = self.workspace_manager.prepare_for_run(run)
+        current_run = run
+        branch_name = self.workspace_manager.branch_name_for_run(run)
+        if run.branch_name != branch_name:
+            current_run = self.observability.update_run(
+                run.id,
+                status=run.status,
+                branch_name=branch_name,
+            )
         self.observability.add_event(
-            run_id=run.id,
-            tick_id=run.tick_id,
+            run_id=current_run.id,
+            tick_id=current_run.tick_id,
             type="workspace.prepared",
             message="Рабочее пространство подготовлено",
-            payload={"workspace_root": str(workspace.root)},
+            payload={"workspace_root": str(workspace.root), "branch_name": branch_name},
         )
 
         if str(task.get("status")) != "InProgress":
@@ -234,7 +242,7 @@ class TaskLifecycleRuntime:
             file_read_max_bytes=self.file_read_max_bytes,
         )
         return RuntimeExecutionContext(
-            run=run,
+            run=current_run,
             task=task,
             workspace=workspace,
             tool_context=tool_context,

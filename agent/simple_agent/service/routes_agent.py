@@ -10,6 +10,7 @@ from simple_agent.service.dependencies import get_repository, get_settings
 from simple_agent.service.schemas import task_selection_result_to_response
 from simple_agent.storage import Repository, SqliteObservabilitySink
 from simple_agent.tracker import TaskTrackerClient
+from simple_agent.workspace import WorkspaceManager
 
 
 router = APIRouter(tags=["agent"])
@@ -68,6 +69,10 @@ async def _run_tick(
         observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email=settings.agent_email,
+        workspace_manager=WorkspaceManager(
+            root=settings.workspace_root,
+            source_repo_root=settings.project_repo_root,
+        ),
     )
     return await service.run_tick(
         source=source,

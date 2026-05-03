@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 import pytest
 
@@ -40,6 +41,20 @@ def test_run_command_denies_destructive_commands(tmp_path: Path) -> None:
         registry.run("run_command", {"command": ["rm", "-rf", "."], "cwd": "."}, context)
 
 
+def test_run_command_accepts_shell_like_string(tmp_path: Path) -> None:
+    registry = build_default_tool_registry()
+    context = _context(tmp_path)
+
+    result = registry.run(
+        "run_command",
+        {"command": f"{sys.executable} -c \"print('ok')\"", "cwd": "."},
+        context,
+    )
+
+    assert result.output["returncode"] == 0
+    assert result.output["stdout"].strip() == "ok"
+
+
 def test_run_command_times_out(tmp_path: Path) -> None:
     registry = build_default_tool_registry()
     context = _context(tmp_path, timeout=0.01)
@@ -62,6 +77,16 @@ def test_all_default_tools_have_llm_metadata() -> None:
         function = tool["function"]
         assert function["description"]
         assert function["parameters"]["type"] == "object"
+
+
+def test_run_command_and_run_tests_schemas_accept_string_or_array() -> None:
+    run_command_schema = TOOL_SPECS["run_command"].input_schema["properties"]["command"]
+    run_tests_schema = TOOL_SPECS["run_tests"].input_schema["properties"]["command"]
+
+    assert run_command_schema["oneOf"][0]["type"] == "string"
+    assert run_command_schema["oneOf"][1]["type"] == "array"
+    assert run_tests_schema["oneOf"][0]["type"] == "string"
+    assert run_tests_schema["oneOf"][1]["type"] == "array"
 
 
 def _context(tmp_path: Path, *, timeout: float = 2) -> ToolContext:

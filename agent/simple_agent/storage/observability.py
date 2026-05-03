@@ -69,6 +69,7 @@ class ObservabilitySink(Protocol):
         run_id: int,
         *,
         status: str,
+        branch_name: str | None = None,
         summary: str | None = None,
         error: str | None = None,
         finished: bool = False,
@@ -204,6 +205,7 @@ class SqliteObservabilitySink:
         run_id: int,
         *,
         status: str,
+        branch_name: str | None = None,
         summary: str | None = None,
         error: str | None = None,
         finished: bool = False,
@@ -211,6 +213,7 @@ class SqliteObservabilitySink:
         return self.repository.update_run(
             run_id,
             status=status,
+            branch_name=branch_name,
             summary=summary,
             error=error,
             finished=finished,

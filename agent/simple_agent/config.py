@@ -12,6 +12,7 @@ class Settings:
     agent_email: str = "agent@example.com"
     task_tracker_mcp_url: str = "http://127.0.0.1:8020/mcp"
     task_tracker_mcp_timeout_seconds: float = 30.0
+    project_repo_root: Path | None = None
     workspace_root: Path = Path(".data/workspaces")
     tool_command_timeout_seconds: float = 10.0
     tool_output_max_bytes: int = 32_000
@@ -40,6 +41,9 @@ def load_settings() -> Settings:
         ),
         task_tracker_mcp_timeout_seconds=float(
             os.getenv("TASK_TRACKER_MCP_TIMEOUT_SECONDS", "30.0")
+        ),
+        project_repo_root=(
+            Path(value) if (value := os.getenv("PROJECT_REPO_ROOT")) else None
         ),
         workspace_root=Path(os.getenv("WORKSPACE_ROOT", ".data/workspaces")),
         tool_command_timeout_seconds=float(

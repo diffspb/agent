@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 from typing import Any
 
 import pytest
@@ -38,6 +39,39 @@ async def test_run_start_endpoint_completes_queued_run(tmp_path: Path) -> None:
     assert events_response.json()[-1]["type"] == "run.completed"
     assert tool_calls_response.status_code == 200
     assert tool_calls_response.json()[0]["tool_name"] == "write_file"
+
+
+@pytest.mark.anyio
+async def test_run_start_endpoint_prepares_git_worktree_when_project_repo_is_configured(
+    tmp_path: Path,
+) -> None:
+    source_repo = _init_git_repo(tmp_path / "source-repo")
+    settings = Settings(
+        database_path=tmp_path / "run-start-git.sqlite3",
+        agent_email="agent@example.com",
+        project_repo_root=source_repo,
+        workspace_root=tmp_path / "workspaces",
+    )
+    app = create_app(settings)
+    repository = app.state.repository
+    run = repository.create_run(external_task_id="PROJECT-7", status="queued")
+    tracker = FakeTracker([_task("PROJECT-7")])
+    app.state.task_tracker_factory = lambda: tracker
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(f"/api/runs/{run.id}/start")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
+    assert response.json()["branch_name"] == "PROJECT-7-agent"
+    workspace = WorkspaceManager(
+        root=settings.workspace_root,
+        source_repo_root=settings.project_repo_root,
+    ).workspace_for_run(repository.get_run(run.id))
+    assert (workspace.repo / "README.md").read_text(encoding="utf-8") == "seed\n"
+    branch = _git_output(workspace.repo, "rev-parse", "--abbrev-ref", "HEAD")
+    assert branch == "PROJECT-7-agent"
 
 
 @pytest.mark.anyio
@@ -244,3 +278,37 @@ class FakeTracker:
     async def comments_list(self, task_id: str) -> list[dict[str, Any]]:
         await self.tasks_get(task_id)
         return self.comments[task_id]
+
+
+def _init_git_repo(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    _git(path, "init", "-b", "master")
+    _git(path, "config", "user.name", "Test User")
+    _git(path, "config", "user.email", "test@example.com")
+    (path / "README.md").write_text("seed\n", encoding="utf-8")
+    _git(path, "add", "README.md")
+    _git(path, "commit", "-m", "Initial commit")
+    return path
+
+
+def _git(repo_root: Path, *args: str) -> None:
+    completed = subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or "git failed")
+
+
+def _git_output(repo_root: Path, *args: str) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError(completed.stderr.strip() or completed.stdout.strip() or "git failed")
+    return completed.stdout.strip()

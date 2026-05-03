@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 import subprocess
 
 from simple_agent.tools.types import JsonObject, ToolContext, ToolError, ToolResult
@@ -23,9 +24,7 @@ class RunCommandTool:
     name = "run_command"
 
     def run(self, input: JsonObject, context: ToolContext) -> ToolResult:
-        command = input.get("command")
-        if not _is_string_list(command):
-            raise ToolError("command must be a non-empty list of strings")
+        command = _normalize_command(input.get("command"))
         executable = command[0]
         if executable in DENIED_COMMANDS:
             raise ToolError(f"Command is denied: {executable}")
@@ -70,6 +69,16 @@ class RunTestsTool:
     def run(self, input: JsonObject, context: ToolContext) -> ToolResult:
         command = input.get("command", ["python", "-m", "pytest"])
         return RunCommandTool().run({"command": command, "cwd": input.get("cwd", ".")}, context)
+
+
+def _normalize_command(value: object) -> list[str]:
+    if isinstance(value, str):
+        command = shlex.split(value)
+    else:
+        command = value
+    if not _is_string_list(command):
+        raise ToolError("command must be a non-empty list of strings or a shell-like command string")
+    return command
 
 
 def _is_string_list(value: object) -> bool:

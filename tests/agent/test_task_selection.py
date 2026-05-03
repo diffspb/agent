@@ -7,6 +7,7 @@ import pytest
 
 from simple_agent.agent import TaskSelectionService
 from simple_agent.storage import Repository, SqliteDatabase, SqliteObservabilitySink
+from simple_agent.workspace import WorkspaceManager
 
 
 @pytest.mark.anyio
@@ -24,6 +25,7 @@ async def test_task_selection_picks_highest_priority_open_unblocked_task(
         observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email="agent@example.com",
+        workspace_manager=WorkspaceManager(root=tmp_path / "workspaces"),
     )
 
     result = await service.run_tick(source="manual")
@@ -31,6 +33,7 @@ async def test_task_selection_picks_highest_priority_open_unblocked_task(
     assert result.tick.status == "completed"
     assert result.selected_run is not None
     assert result.selected_run.external_task_id == "PROJECT-2"
+    assert result.selected_run.branch_name == "PROJECT-2-agent"
     assert [candidate.reason for candidate in result.candidates] == [
         "lower_priority_than_selected",
         "selected_highest_priority",
@@ -57,6 +60,7 @@ async def test_task_selection_skips_task_blocked_by_active_dependency(
         observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email="agent@example.com",
+        workspace_manager=WorkspaceManager(root=tmp_path / "workspaces"),
     )
 
     result = await service.run_tick(source="manual")
@@ -90,6 +94,7 @@ async def test_task_selection_ignores_cancelled_dependency(tmp_path: Path) -> No
         observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email="agent@example.com",
+        workspace_manager=WorkspaceManager(root=tmp_path / "workspaces"),
     )
 
     result = await service.run_tick(source="manual")
@@ -114,6 +119,7 @@ async def test_task_selection_skips_unknown_dependency(tmp_path: Path) -> None:
         observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email="agent@example.com",
+        workspace_manager=WorkspaceManager(root=tmp_path / "workspaces"),
     )
 
     result = await service.run_tick(source="manual")
@@ -133,6 +139,7 @@ async def test_task_selection_records_reconciliation_and_creates_new_attempt_for
         observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email="agent@example.com",
+        workspace_manager=WorkspaceManager(root=tmp_path / "workspaces"),
     )
 
     result = await service.run_tick(source="manual")

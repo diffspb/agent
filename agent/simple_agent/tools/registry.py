@@ -78,7 +78,12 @@ TOOL_SPECS = {
         input_schema={
             "type": "object",
             "properties": {
-                "command": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                "command": {
+                    "oneOf": [
+                        {"type": "string", "minLength": 1},
+                        {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                    ]
+                },
                 "cwd": {"type": "string", "default": "."},
             },
             "required": ["command"],
@@ -91,7 +96,12 @@ TOOL_SPECS = {
         input_schema={
             "type": "object",
             "properties": {
-                "command": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                "command": {
+                    "oneOf": [
+                        {"type": "string", "minLength": 1},
+                        {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                    ]
+                },
                 "cwd": {"type": "string", "default": "."},
             },
             "additionalProperties": False,
