@@ -5,14 +5,14 @@
       "id": "PROJECT-1",
       "type": "task",
       "status": "Open",
-      "title": "Добавить healthcheck",
+      "title": "Добавить subtract в калькулятор",
       "author_email": "author@example.com",
       "assignee_email": "agent@example.com",
-      "description": "Нужно добавить GET /health и покрыть его тестом.",
+      "description": "Нужно добавить функцию subtract(left, right) в модуль demo_app/calculator.py, экспортировать ее через demo_app/__init__.py и покрыть тестом в tests/test_calculator.py.",
       "links": [],
       "comments": [],
       "metadata": {
-        "repository": "simple-agent",
+        "repository": "demo-python-app",
         "priority": "normal"
       }
     }

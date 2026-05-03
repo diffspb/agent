@@ -28,6 +28,7 @@ def test_reset_sandbox_script_creates_fresh_git_repo(tmp_path: Path) -> None:
     assert completed.returncode == 0, completed.stderr
     assert (sandbox_root / "repo" / ".git").exists()
     assert (sandbox_root / "repo" / "demo_app" / "calculator.py").exists()
+    assert not (sandbox_root / "repo" / "README.md").exists()
     assert (sandbox_root / "workspaces").is_dir()
     assert "Sandbox reset complete" in completed.stdout
 
