@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 
 from simple_agent.agent.artifacts import (
+    build_git_diff,
     build_snapshot_diff,
+    build_workspace_diff,
     capture_repo_snapshot,
     list_artifacts,
     read_artifact,
@@ -54,6 +57,50 @@ def test_artifact_write_list_and_read_stay_inside_artifacts(tmp_path: Path) -> N
     assert read_artifact(workspace, "reports/final.diff") == "diff\n"
 
 
+def test_build_git_diff_uses_gitignore_and_includes_untracked_text_files(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    _init_git_repo(workspace.repo)
+    (workspace.repo / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
+    (workspace.repo / "tracked.txt").write_text("before\n", encoding="utf-8")
+    _git(workspace.repo, "add", ".")
+    _git(workspace.repo, "commit", "-m", "initial")
+
+    (workspace.repo / "tracked.txt").write_text("after\n", encoding="utf-8")
+    (workspace.repo / "added.txt").write_text("new\n", encoding="utf-8")
+    (workspace.repo / "__pycache__").mkdir()
+    (workspace.repo / "__pycache__" / "module.cpython-312.pyc").write_bytes(b"binary")
+
+    diff = build_git_diff(workspace, max_file_bytes=1_000)
+
+    assert "tracked.txt" in diff
+    assert "added.txt" in diff
+    assert "__pycache__" not in diff
+    assert "module.cpython-312.pyc" not in diff
+
+
+def test_build_workspace_diff_prefers_git_when_repo_is_available(tmp_path: Path) -> None:
+    workspace = _workspace(tmp_path)
+    _init_git_repo(workspace.repo)
+    (workspace.repo / "tracked.txt").write_text("before\n", encoding="utf-8")
+    _git(workspace.repo, "add", "tracked.txt")
+    _git(workspace.repo, "commit", "-m", "initial")
+
+    before = capture_repo_snapshot(workspace, max_file_bytes=1_000)
+    (workspace.repo / "tracked.txt").write_text("after\n", encoding="utf-8")
+    (workspace.repo / "scratch.pyc").write_bytes(b"binary")
+    after = capture_repo_snapshot(workspace, max_file_bytes=1_000)
+
+    diff = build_workspace_diff(
+        workspace,
+        before=before,
+        after=after,
+        max_file_bytes=1_000,
+    )
+
+    assert "tracked.txt" in diff
+    assert "scratch.pyc" in diff
+
+
 def _workspace(tmp_path: Path) -> Workspace:
     workspace = Workspace(
         root=tmp_path,
@@ -71,3 +118,20 @@ def _workspace(tmp_path: Path) -> Workspace:
     ):
         path.mkdir(parents=True, exist_ok=True)
     return workspace
+
+
+def _init_git_repo(repo_root: Path) -> None:
+    _git(repo_root, "init", "-b", "main")
+    _git(repo_root, "config", "user.name", "Test User")
+    _git(repo_root, "config", "user.email", "test@example.com")
+
+
+def _git(repo_root: Path, *args: str) -> None:
+    completed = subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise AssertionError(completed.stderr or completed.stdout or "git command failed")

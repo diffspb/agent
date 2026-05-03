@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import difflib
 from pathlib import Path
+import subprocess
 
 from simple_agent.workspace import Workspace
 
@@ -55,6 +56,52 @@ def build_snapshot_diff(before: FileSnapshot, after: FileSnapshot) -> str:
     return "\n".join(chunks).strip() + "\n" if chunks else ""
 
 
+def build_workspace_diff(
+    workspace: Workspace,
+    *,
+    before: FileSnapshot,
+    after: FileSnapshot,
+    max_file_bytes: int,
+) -> str:
+    if _is_git_repository(workspace.repo):
+        return build_git_diff(workspace, max_file_bytes=max_file_bytes)
+    return build_snapshot_diff(before, after)
+
+
+def build_git_diff(workspace: Workspace, *, max_file_bytes: int) -> str:
+    tracked_diff = _git_output(workspace.repo, "diff", "--", allow_empty=True)
+    untracked_chunks: list[str] = []
+    for relative_path in _git_output(
+        workspace.repo,
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+        allow_empty=True,
+    ).splitlines():
+        if not relative_path:
+            continue
+        path = workspace.repo / relative_path
+        if not path.is_file():
+            continue
+        data = path.read_bytes()
+        if len(data) > max_file_bytes:
+            continue
+        content = data.decode("utf-8", errors="replace")
+        untracked_chunks.extend(
+            difflib.unified_diff(
+                [],
+                content.splitlines(keepends=True),
+                fromfile="/dev/null",
+                tofile=f"b/{relative_path}",
+                lineterm="",
+            )
+        )
+        untracked_chunks.append("\n")
+
+    parts = [part for part in (tracked_diff.strip(), "\n".join(untracked_chunks).strip()) if part]
+    return "\n\n".join(parts).strip() + "\n" if parts else ""
+
+
 def write_artifact(workspace: Workspace, relative_path: str, content: str) -> Artifact:
     path = workspace.resolve_path(relative_path, base="artifacts")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -93,3 +140,27 @@ def _is_ignored(path: Path, workspace: Workspace) -> bool:
     except ValueError:
         return True
     return ".git" in relative.parts
+
+
+def _is_git_repository(repo_root: Path) -> bool:
+    completed = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return completed.returncode == 0 and completed.stdout.strip() == "true"
+
+
+def _git_output(repo_root: Path, *args: str, allow_empty: bool = False) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed.returncode != 0 and not allow_empty:
+        stderr = completed.stderr.strip()
+        stdout = completed.stdout.strip()
+        raise RuntimeError(stderr or stdout or "git command failed")
+    return completed.stdout

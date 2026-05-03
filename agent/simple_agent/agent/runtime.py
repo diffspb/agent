@@ -5,7 +5,7 @@ import json
 from typing import Any
 
 from simple_agent.agent.artifacts import (
-    build_snapshot_diff,
+    build_workspace_diff,
     capture_repo_snapshot,
     write_artifact,
 )
@@ -518,7 +518,12 @@ class LLMAgentRuntime(TaskLifecycleRuntime):
         before: dict[str, str],
         after: dict[str, str],
     ) -> CompletionReport:
-        diff = build_snapshot_diff(before, after)
+        diff = build_workspace_diff(
+            context.workspace,
+            before=before,
+            after=after,
+            max_file_bytes=self.file_read_max_bytes,
+        )
         if not diff:
             return CompletionReport(
                 outcome="answer_only",
