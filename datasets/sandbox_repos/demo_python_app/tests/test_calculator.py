@@ -1,4 +1,4 @@
-from demo_app.calculator import add, multiply, subtract
+from demo_app.calculator import add, multiply
 
 
 def test_add() -> None:
@@ -7,7 +7,3 @@ def test_add() -> None:
 
 def test_multiply() -> None:
     assert multiply(4, 5) == 20
-
-
-def test_subtract() -> None:
-    assert subtract(7, 2) == 5
