@@ -51,6 +51,56 @@ Backend по умолчанию слушает `http://127.0.0.1:8010`.
 make run-agent DB_PATH=.data/dev.sqlite3
 ```
 
+## Песочница Для Ручных И Live Прогонов
+
+Для ручной проверки агента не используйте репозиторий `simple_agent` как `PROJECT_REPO_ROOT`.
+Вместо этого используйте отдельную песочницу, которая пересоздается из seed-проекта.
+
+Подготовить чистую песочницу:
+
+```bash
+make sandbox-reset
+```
+
+Команда создает:
+
+- `/tmp/simple-agent-sandbox/repo` — отдельный git-репозиторий для задач;
+- `/tmp/simple-agent-sandbox/workspaces` — каталог worktree и run;
+- initial commit на ветке `main`.
+
+Запустить MCP-эмулятор для песочницы:
+
+```bash
+make sandbox-run-tracker
+```
+
+Запустить backend агента на песочнице:
+
+```bash
+make sandbox-run-agent
+```
+
+Запустить backend песочницы с локальным LM Studio:
+
+```bash
+make sandbox-run-agent-llm-local
+```
+
+Полностью удалить песочницу:
+
+```bash
+make sandbox-clean
+```
+
+По умолчанию песочница живет в `/tmp/simple-agent-sandbox`. При необходимости корень можно переопределить:
+
+```bash
+make sandbox-reset SANDBOX_ROOT=/tmp/simple-agent-sandbox-2
+make sandbox-run-agent SANDBOX_ROOT=/tmp/simple-agent-sandbox-2
+```
+
+Seed-проект для песочницы хранится в `datasets/sandbox_repos/demo_python_app`.
+
 Настройки агента для подключения к MCP-трекеру:
 
 ```bash
@@ -58,8 +108,8 @@ make run-agent \
   AGENT_EMAIL=agent@example.com \
   TASK_TRACKER_MCP_URL=http://127.0.0.1:8020/mcp \
   TASK_TRACKER_MCP_TIMEOUT_SECONDS=30 \
-  PROJECT_REPO_ROOT=. \
-  WORKSPACE_ROOT=.data/workspaces \
+  PROJECT_REPO_ROOT=/tmp/simple-agent-sandbox/repo \
+  WORKSPACE_ROOT=/tmp/simple-agent-sandbox/workspaces \
   TOOL_COMMAND_TIMEOUT_SECONDS=10
 ```
 
@@ -95,13 +145,15 @@ make run-agent \
 make run-agent-llm-local
 ```
 
+Эта цель запускает backend с локальной LLM-конфигурацией, но без обязательной привязки к sandbox-репозиторию. Для ручного smoke на отдельном тестовом репозитории используйте `make sandbox-run-agent-llm-local`.
+
 Она запускает backend в `llm`-режиме с:
 
 - `LLM_BASE_URL=http://127.0.0.1:1234/v1`
 - `LLM_API_KEY=lm-studio`
 - `LLM_MODEL=openai/qwen3.5-2b`
 - `NO_PROXY=localhost,127.0.0.1`
-- `PROJECT_REPO_ROOT=.`
+- `PROJECT_REPO_ROOT=/tmp/simple-agent-sandbox/repo`
 
 При необходимости можно переопределить модель:
 
@@ -201,6 +253,8 @@ make run-task-tracker
 ```bash
 make run-task-tracker-llm-local
 ```
+
+Для ручных и live smoke-прогонов предпочтительнее использовать `make sandbox-run-tracker`, чтобы snapshot состояния задач лежал рядом с песочницей, а не в `.data` текущего репозитория.
 
 По умолчанию эмулятор использует:
 
