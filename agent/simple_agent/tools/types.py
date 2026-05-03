@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from simple_agent.workspace import Workspace
+
+if TYPE_CHECKING:
+    from simple_agent.tracker.client import TaskTrackerClient
 
 
 JsonObject = dict[str, Any]
@@ -15,6 +18,8 @@ class ToolContext:
     command_timeout_seconds: float
     output_max_bytes: int
     file_read_max_bytes: int
+    tracker: "TaskTrackerClient | None" = None
+    agent_email: str | None = None
 
 
 @dataclass(frozen=True)
@@ -33,6 +38,13 @@ class Tool(Protocol):
     name: str
 
     def run(self, input: JsonObject, context: ToolContext) -> ToolResult:
+        raise NotImplementedError
+
+
+class AsyncTool(Protocol):
+    name: str
+
+    async def arun(self, input: JsonObject, context: ToolContext) -> ToolResult:
         raise NotImplementedError
 
 

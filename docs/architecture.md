@@ -222,14 +222,13 @@ Git:
 
 Таск-трекер:
 
-- MCP tools task tracker:
-  - `workflow_get`
-  - `tasks_get`
-  - `tasks_list`
-  - `tasks_update`
-  - `comments_add`
-  - `comments_list`
-  - будущие project-specific MCP tools
+- `workflow_get`
+- `tasks_get`
+- `tasks_list`
+- `tasks_update`
+- `comments_add`
+- `comments_list`
+- будущие project-specific MCP tools
 
 Контроль безопасности:
 

@@ -310,6 +310,7 @@
 
 ## Этап 10. MCP Tools И Prompt Refactor
 
+Статус: В реализации в ветке `stage-10-mcp-tools-prompt-refactor`.
 Результат: агентский цикл работает с задачей через MCP tools в общем registry, а lifecycle runtime перестает содержать жесткую workflow-логику task tracker.
 
 Работы:

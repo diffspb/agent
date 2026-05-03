@@ -20,13 +20,44 @@ async def test_llm_runtime_runs_tool_loop_and_completes_task(tmp_path: Path) -> 
     llm = StubLLMClient(
         [
             LLMResponse(
-                content="Создам файл результата.",
+                content="Переведу задачу в работу и создам файл результата.",
                 tool_calls=[
+                    LLMToolCall(
+                        id="call-0",
+                        name="tasks_update",
+                        arguments={"task_id": "PROJECT-1", "patch": {"status": "InProgress"}},
+                    ),
+                    LLMToolCall(
+                        id="call-0b",
+                        name="comments_add",
+                        arguments={
+                            "task_id": "PROJECT-1",
+                            "body": "Агент начал выполнение задачи в LLM-режиме.",
+                        },
+                    ),
                     LLMToolCall(
                         id="call-1",
                         name="write_file",
                         arguments={"path": "result.txt", "content": "done\n"},
-                    )
+                    ),
+                ],
+            ),
+            LLMResponse(
+                content="Оставлю итоговый комментарий и обновлю статус.",
+                tool_calls=[
+                    LLMToolCall(
+                        id="call-2",
+                        name="comments_add",
+                        arguments={
+                            "task_id": "PROJECT-1",
+                            "body": "Готово. Создан result.txt.\nПроверки: Проверки не запускались: LLM runtime не вызвал run_tests.\nDiff-артефакт: final.diff",
+                        },
+                    ),
+                    LLMToolCall(
+                        id="call-3",
+                        name="tasks_update",
+                        arguments={"task_id": "PROJECT-1", "patch": {"status": "InReview"}},
+                    ),
                 ],
             ),
             LLMResponse(content="Готово. Создан result.txt."),
@@ -43,9 +74,7 @@ async def test_llm_runtime_runs_tool_loop_and_completes_task(tmp_path: Path) -> 
 
     assert result.run.status == "completed"
     assert tracker.tasks["PROJECT-1"]["status"] == "InReview"
-    assert tracker.comments["PROJECT-1"][0]["body"] == (
-        "Агент начал выполнение задачи в LLM-режиме."
-    )
+    assert tracker.comments["PROJECT-1"][0]["body"] == "Агент начал выполнение задачи в LLM-режиме."
     assert "Готово. Создан result.txt." in tracker.comments["PROJECT-1"][1]["body"]
     assert "Diff-артефакт: final.diff" in tracker.comments["PROJECT-1"][1]["body"]
     events = repository.list_events_for_run(run.id)
@@ -54,9 +83,13 @@ async def test_llm_runtime_runs_tool_loop_and_completes_task(tmp_path: Path) -> 
     assert "artifact.created" in [event.type for event in events]
     tool_calls = repository.list_tool_calls_for_run(run.id)
     assert [(call.tool_name, call.status) for call in tool_calls] == [
-        ("write_file", "completed")
+        ("tasks_update", "completed"),
+        ("comments_add", "completed"),
+        ("write_file", "completed"),
+        ("comments_add", "completed"),
+        ("tasks_update", "completed"),
     ]
-    assert len(llm.requests) == 2
+    assert len(llm.requests) == 3
     assert llm.requests[0]["tools"]
     diff_path = tmp_path / "workspaces" / "run-1-PROJECT-1" / "artifacts" / "final.diff"
     assert "result.txt" in diff_path.read_text(encoding="utf-8")
@@ -67,7 +100,25 @@ async def test_llm_runtime_can_complete_answer_only_task(tmp_path: Path) -> None
     repository = _repository(tmp_path)
     run = repository.create_run(external_task_id="PROJECT-1", status="queued")
     tracker = FakeTracker([_task("PROJECT-1")])
-    llm = StubLLMClient([LLMResponse(content="Ответ без изменения файлов.")])
+    llm = StubLLMClient(
+        [
+            LLMResponse(
+                tool_calls=[
+                    LLMToolCall(
+                        id="call-1",
+                        name="comments_add",
+                        arguments={"task_id": "PROJECT-1", "body": "Ответ без изменения файлов."},
+                    ),
+                    LLMToolCall(
+                        id="call-2",
+                        name="tasks_update",
+                        arguments={"task_id": "PROJECT-1", "patch": {"status": "Done"}},
+                    ),
+                ]
+            ),
+            LLMResponse(content="Ответ без изменения файлов."),
+        ]
+    )
     runtime = _runtime(
         repository=repository,
         tracker=tracker,
@@ -115,7 +166,7 @@ async def test_llm_runtime_continues_after_tool_error(tmp_path: Path) -> None:
     result = await runtime.start_run(run)
 
     assert result.run.status == "completed"
-    assert tracker.tasks["PROJECT-1"]["status"] == "Done"
+    assert tracker.tasks["PROJECT-1"]["status"] == "Open"
     tool_calls = repository.list_tool_calls_for_run(run.id)
     assert [(call.tool_name, call.status) for call in tool_calls] == [
         ("read_file", "failed")
@@ -184,7 +235,7 @@ async def test_llm_runtime_handles_empty_final_response(tmp_path: Path) -> None:
     result = await runtime.start_run(run)
 
     assert result.run.status == "completed"
-    assert tracker.comments["PROJECT-1"][-1]["body"] == "LLM runtime завершил задачу."
+    assert tracker.comments["PROJECT-1"] == []
 
 
 @pytest.mark.anyio
@@ -245,7 +296,7 @@ def _runtime(
         tracker=tracker,
         agent_email="agent@example.com",
         workspace_manager=WorkspaceManager(root=tmp_path / "workspaces"),
-        tool_registry=build_default_tool_registry(),
+        tool_registry=build_default_tool_registry(include_task_tracker_tools=True),
         llm_client=llm,
         max_steps=max_steps,
         command_timeout_seconds=2,
@@ -276,11 +327,27 @@ class FakeTracker:
             task["id"]: [] for task in tasks
         }
 
+    async def workflow_get(self) -> dict[str, Any]:
+        return {"statuses": ["Open", "InProgress", "InReview", "Done"], "transitions": "any"}
+
     async def tasks_get(self, task_id: str) -> dict[str, Any]:
         task = self.tasks.get(task_id)
         if task is None:
             raise RuntimeError(f"Task not found: {task_id}")
         return task
+
+    async def tasks_list(
+        self,
+        *,
+        status: str | None = None,
+        assignee_email: str | None = None,
+    ) -> list[dict[str, Any]]:
+        tasks = list(self.tasks.values())
+        if status is not None:
+            tasks = [task for task in tasks if task.get("status") == status]
+        if assignee_email is not None:
+            tasks = [task for task in tasks if task.get("assignee_email") == assignee_email]
+        return tasks
 
     async def tasks_update(self, task_id: str, patch: dict[str, Any]) -> dict[str, Any]:
         task = await self.tasks_get(task_id)
@@ -303,3 +370,7 @@ class FakeTracker:
         }
         self.comments[task_id].append(comment)
         return comment
+
+    async def comments_list(self, task_id: str) -> list[dict[str, Any]]:
+        await self.tasks_get(task_id)
+        return self.comments[task_id]
