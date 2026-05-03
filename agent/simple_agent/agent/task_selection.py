@@ -4,8 +4,9 @@ from dataclasses import dataclass
 import re
 from typing import Any
 
+from simple_agent.agent.policies import decide_task_selection
 from simple_agent.storage.models import AgentTickRecord, RunRecord, TaskCandidateRecord
-from simple_agent.storage.repository import Repository
+from simple_agent.storage import ObservabilitySink
 from simple_agent.tracker.client import JsonObject, TaskTrackerClient
 
 
@@ -36,17 +37,18 @@ class _EvaluatedTask:
     decision: str
     reason: str
     blocking_task_ids: list[str]
+    metadata: JsonObject
 
 
 class TaskSelectionService:
     def __init__(
         self,
         *,
-        repository: Repository,
+        observability: ObservabilitySink,
         tracker: TaskTrackerClient,
         agent_email: str,
     ) -> None:
-        self.repository = repository
+        self.observability = observability
         self.tracker = tracker
         self.agent_email = agent_email
 
@@ -57,7 +59,7 @@ class TaskSelectionService:
         trigger_task_id: str | None = None,
         payload: dict[str, Any] | None = None,
     ) -> TaskSelectionResult:
-        tick = self.repository.create_tick(
+        tick = self.observability.create_tick(
             source=source,
             status="started",
             trigger_task_id=trigger_task_id,
@@ -66,7 +68,7 @@ class TaskSelectionService:
 
         try:
             await self.tracker.workflow_get()
-            self.repository.add_event(
+            self.observability.add_event(
                 tick_id=tick.id,
                 type="tick.workflow_loaded",
                 message="Workflow таск-трекера загружен",
@@ -77,7 +79,11 @@ class TaskSelectionService:
                 assignee_email=self.agent_email,
             )
             all_tasks = await self.tracker.tasks_list()
-            evaluated = await self._evaluate_tasks(tasks=tasks, all_tasks=all_tasks)
+            evaluated = await self._evaluate_tasks(
+                tick_id=tick.id,
+                tasks=tasks,
+                all_tasks=all_tasks,
+            )
             selected = self._select_task(evaluated)
             candidates = self._record_candidates(
                 tick_id=tick.id,
@@ -89,13 +95,13 @@ class TaskSelectionService:
             selected_task = selected.task if selected else None
             if selected_task is not None:
                 task_id = str(selected_task["id"])
-                selected_run = self.repository.create_run(
+                selected_run = self.observability.create_run(
                     tick_id=tick.id,
                     external_task_id=task_id,
                     status="queued",
                     summary="Задача выбрана для выполнения",
                 )
-                self.repository.add_event(
+                self.observability.add_event(
                     tick_id=tick.id,
                     run_id=selected_run.id,
                     type="task.selected",
@@ -103,14 +109,14 @@ class TaskSelectionService:
                     payload={"external_task_id": task_id},
                 )
             else:
-                self.repository.add_event(
+                self.observability.add_event(
                     tick_id=tick.id,
                     type="task_selection.none",
                     message="Нет доступных задач для выполнения",
                     payload={"candidate_count": len(evaluated)},
                 )
 
-            tick = self.repository.complete_tick(tick.id, status="completed")
+            tick = self.observability.complete_tick(tick.id, status="completed")
             return TaskSelectionResult(
                 tick=tick,
                 selected_run=selected_run,
@@ -118,13 +124,13 @@ class TaskSelectionService:
                 candidates=candidates,
             )
         except Exception as exc:
-            self.repository.add_event(
+            self.observability.add_event(
                 tick_id=tick.id,
                 type="tick.failed",
                 message="Tick завершился с ошибкой",
                 payload={"error": str(exc)},
             )
-            failed_tick = self.repository.complete_tick(
+            failed_tick = self.observability.complete_tick(
                 tick.id,
                 status="failed",
                 error=str(exc),
@@ -133,12 +139,13 @@ class TaskSelectionService:
                 tick=failed_tick,
                 selected_run=None,
                 selected_task=None,
-                candidates=self.repository.list_task_candidates_for_tick(tick.id),
+                candidates=self.observability.list_task_candidates_for_tick(tick.id),
             )
 
     async def _evaluate_tasks(
         self,
         *,
+        tick_id: int,
         tasks: list[JsonObject],
         all_tasks: list[JsonObject],
     ) -> list[_EvaluatedTask]:
@@ -148,7 +155,11 @@ class TaskSelectionService:
             task_id = str(listed_task.get("id"))
             task = await self._load_task(task_id, fallback=listed_task)
             evaluated.append(
-                await self._evaluate_task(task=task, tasks_by_id=tasks_by_id)
+                await self._evaluate_task(
+                    tick_id=tick_id,
+                    task=task,
+                    tasks_by_id=tasks_by_id,
+                )
             )
         return evaluated
 
@@ -161,6 +172,7 @@ class TaskSelectionService:
     async def _evaluate_task(
         self,
         *,
+        tick_id: int,
         task: JsonObject,
         tasks_by_id: dict[str, JsonObject],
     ) -> _EvaluatedTask:
@@ -171,6 +183,7 @@ class TaskSelectionService:
             tasks_by_id=tasks_by_id,
         )
 
+        metadata: JsonObject = {}
         if str(task.get("status")) != "Open":
             reason = "status_not_open"
             dependencies_state = "not_checked"
@@ -180,9 +193,6 @@ class TaskSelectionService:
         elif str(task.get("type")) not in EXECUTABLE_TASK_TYPES:
             reason = "unsupported_task_type"
             dependencies_state = "not_checked"
-        elif self.repository.get_active_run_for_task(task_id) is not None:
-            reason = "already_running"
-            dependencies_state = "active_run"
         elif "dependency_unknown" in blocking_task_ids:
             reason = "dependency_unknown"
             dependencies_state = "unknown"
@@ -190,8 +200,33 @@ class TaskSelectionService:
             reason = "blocked_by_dependency"
             dependencies_state = "blocked"
         else:
+            active_run = self.observability.get_active_run_for_task(task_id)
+            decision = decide_task_selection(
+                task=task,
+                active_run=active_run,
+                agent_email=self.agent_email,
+            )
+            if decision.event_type is not None and decision.message is not None:
+                self.observability.add_event(
+                    tick_id=tick_id,
+                    run_id=active_run.id if active_run is not None else None,
+                    type=decision.event_type,
+                    message=decision.message,
+                    payload=decision.payload,
+                )
+            if active_run is not None:
+                metadata["local_active_run"] = {
+                    "id": active_run.id,
+                    "status": active_run.status,
+                }
+            if decision.reason is not None:
+                reason = decision.reason
+                dependencies_state = decision.dependencies_state or "not_checked"
+            else:
+                reason = "eligible"
+                dependencies_state = "clear"
+        if reason == "eligible":
             reason = "eligible"
-            dependencies_state = "clear"
 
         decision = "candidate" if reason == "eligible" else "skipped"
         return _EvaluatedTask(
@@ -201,6 +236,7 @@ class TaskSelectionService:
             decision=decision,
             reason=reason,
             blocking_task_ids=blocking_task_ids,
+            metadata=metadata,
         )
 
     async def _find_blocking_tasks(
@@ -287,7 +323,7 @@ class TaskSelectionService:
                 reason = "lower_priority_than_selected"
 
             records.append(
-                self.repository.add_task_candidate(
+                self.observability.add_task_candidate(
                     tick_id=tick_id,
                     external_task_id=task_id,
                     status=str(item.task.get("status", "")),
@@ -301,6 +337,7 @@ class TaskSelectionService:
                         "type": item.task.get("type"),
                         "priority": _metadata(item.task).get("priority"),
                         "blocking_task_ids": item.blocking_task_ids,
+                        **item.metadata,
                     },
                 )
             )

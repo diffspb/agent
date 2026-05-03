@@ -308,6 +308,19 @@ class Repository:
             ).fetchall()
         return [_event_from_row(row) for row in rows]
 
+    def list_events_for_tick(self, tick_id: int, *, limit: int = 100) -> list[EventRecord]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM events
+                WHERE tick_id = ?
+                ORDER BY created_at ASC, id ASC
+                LIMIT ?
+                """,
+                (tick_id, limit),
+            ).fetchall()
+        return [_event_from_row(row) for row in rows]
+
     def create_tool_call(
         self,
         *,

@@ -259,6 +259,8 @@ workspaces/
 
 В этапе 1 хранилище реализовано как локальный SQLite-файл через стандартный модуль Python `sqlite3`. Оно хранит webhook/tick-события, попытки выполнения, кандидатов выбора, события и вызовы инструментов. Подробности схемы, ограничения и REST API описаны в [документе хранилища](storage.md). Архитектурное решение о stateless бизнес-поведении зафиксировано в [ADR-0006](adr/0006-stateless-business-behavior-with-local-observability.md).
 
+В этапе 8 runtime и tick-selection больше не пишут в `Repository` напрямую. Для записи observability-данных введен интерфейс `ObservabilitySink`, а SQLite-реализация остается адаптером хранения.
+
 Таблицы:
 
 ```text

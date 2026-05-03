@@ -123,6 +123,29 @@ async def test_run_start_endpoint_rejects_completed_run(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
+async def test_run_start_endpoint_rejects_live_done_task(tmp_path: Path) -> None:
+    app = create_app(
+        Settings(
+            database_path=tmp_path / "run-live-conflict.sqlite3",
+            workspace_root=tmp_path / "workspaces",
+        )
+    )
+    repository = app.state.repository
+    run = repository.create_run(external_task_id="PROJECT-1", status="queued")
+    app.state.task_tracker_factory = lambda: FakeTracker([_task("PROJECT-1", status="Done")])
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(f"/api/runs/{run.id}/start")
+        events_response = await client.get(f"/api/runs/{run.id}/events")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Task cannot be started from status: Done"
+    assert events_response.status_code == 200
+    assert events_response.json()[0]["type"] == "task.start_rejected"
+
+
+@pytest.mark.anyio
 async def test_run_artifacts_endpoint_handles_empty_missing_and_invalid_paths(
     tmp_path: Path,
 ) -> None:
@@ -157,11 +180,11 @@ async def test_run_artifacts_endpoint_handles_empty_missing_and_invalid_paths(
     assert traversal_response.status_code == 400
 
 
-def _task(task_id: str) -> dict[str, Any]:
+def _task(task_id: str, *, status: str = "Open") -> dict[str, Any]:
     return {
         "id": task_id,
         "type": "task",
-        "status": "Open",
+        "status": status,
         "title": f"Задача {task_id}",
         "author_email": "author@example.com",
         "assignee_email": "agent@example.com",

@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from simple_agent.agent import PrimitiveAgentRuntime
-from simple_agent.storage import Repository, SqliteDatabase
+from simple_agent.storage import Repository, SqliteDatabase, SqliteObservabilitySink
 from simple_agent.tools import build_default_tool_registry
 from simple_agent.workspace import WorkspaceManager
 
@@ -73,6 +73,47 @@ async def test_primitive_runtime_marks_run_failed_on_tracker_error(
     assert repository.list_events_for_run(run.id)[-1].type == "run.failed"
 
 
+@pytest.mark.anyio
+async def test_primitive_runtime_can_resume_task_already_in_progress(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path)
+    run = repository.create_run(external_task_id="PROJECT-1", status="queued")
+    tracker = FakeTracker([_task("PROJECT-1", status="InProgress")])
+    runtime = _runtime(repository=repository, tracker=tracker, tmp_path=tmp_path)
+
+    result = await runtime.start_run(run)
+
+    assert result.run.status == "completed"
+    reconciliation_events = [
+        event
+        for event in repository.list_events_for_run(run.id)
+        if event.type == "task.reconciliation_detected"
+    ]
+    assert len(reconciliation_events) == 1
+
+
+@pytest.mark.anyio
+async def test_primitive_runtime_rejects_start_when_live_task_is_done(
+    tmp_path: Path,
+) -> None:
+    repository = _repository(tmp_path)
+    run = repository.create_run(external_task_id="PROJECT-1", status="queued")
+    tracker = FakeTracker([_task("PROJECT-1", status="Done")])
+    runtime = _runtime(repository=repository, tracker=tracker, tmp_path=tmp_path)
+
+    with pytest.raises(ValueError, match="Task cannot be started from status: Done"):
+        await runtime.start_run(run)
+
+    assert repository.get_run(run.id).status == "queued"
+    rejection_events = [
+        event
+        for event in repository.list_events_for_run(run.id)
+        if event.type == "task.start_rejected"
+    ]
+    assert len(rejection_events) == 1
+
+
 def _repository(tmp_path: Path) -> Repository:
     database = SqliteDatabase(tmp_path / "runtime.sqlite3")
     database.initialize()
@@ -86,7 +127,7 @@ def _runtime(
     tmp_path: Path,
 ) -> PrimitiveAgentRuntime:
     return PrimitiveAgentRuntime(
-        repository=repository,
+        observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email="agent@example.com",
         workspace_manager=WorkspaceManager(root=tmp_path / "workspaces"),
@@ -97,11 +138,11 @@ def _runtime(
     )
 
 
-def _task(task_id: str) -> dict[str, Any]:
+def _task(task_id: str, *, status: str = "Open") -> dict[str, Any]:
     return {
         "id": task_id,
         "type": "task",
-        "status": "Open",
+        "status": status,
         "title": f"Задача {task_id}",
         "author_email": "author@example.com",
         "assignee_email": "agent@example.com",

@@ -9,10 +9,11 @@ from simple_agent.agent.artifacts import (
     capture_repo_snapshot,
     write_artifact,
 )
+from simple_agent.agent.policies import decide_run_start
 from simple_agent.agent.prompts import SYSTEM_PROMPT, build_task_prompt
 from simple_agent.llm import LLMClient, LLMToolCall
 from simple_agent.storage.models import RunRecord
-from simple_agent.storage.repository import Repository
+from simple_agent.storage import ObservabilitySink
 from simple_agent.tools import ToolContext, ToolError, ToolRegistry
 from simple_agent.tracker.client import TaskTrackerClient
 from simple_agent.workspace import Workspace, WorkspaceManager
@@ -54,7 +55,7 @@ class TaskLifecycleRuntime:
     def __init__(
         self,
         *,
-        repository: Repository,
+        observability: ObservabilitySink,
         tracker: TaskTrackerClient,
         agent_email: str,
         workspace_manager: WorkspaceManager,
@@ -63,7 +64,7 @@ class TaskLifecycleRuntime:
         output_max_bytes: int,
         file_read_max_bytes: int,
     ) -> None:
-        self.repository = repository
+        self.observability = observability
         self.tracker = tracker
         self.agent_email = agent_email
         self.workspace_manager = workspace_manager
@@ -76,12 +77,44 @@ class TaskLifecycleRuntime:
         if run.status not in RUN_STARTABLE_STATUSES:
             raise ValueError(f"Run cannot be started from status: {run.status}")
 
-        running = self.repository.update_run(
+        try:
+            task = await self.tracker.tasks_get(run.external_task_id)
+        except Exception as exc:
+            await self._try_add_failure_comment(run, str(exc))
+            failed = self.observability.update_run(
+                run.id,
+                status="failed",
+                summary=self.failed_summary,
+                error=str(exc),
+                finished=True,
+            )
+            self.observability.add_event(
+                run_id=run.id,
+                tick_id=run.tick_id,
+                type="run.failed",
+                message="Run завершился с ошибкой",
+                payload={"error": str(exc)},
+            )
+            return RuntimeResult(run=failed)
+
+        decision = decide_run_start(task=task, agent_email=self.agent_email)
+        if decision.event_type is not None and decision.event_message is not None:
+            self.observability.add_event(
+                run_id=run.id,
+                tick_id=run.tick_id,
+                type=decision.event_type,
+                message=decision.event_message,
+                payload=decision.payload,
+            )
+        if not decision.allowed:
+            raise ValueError(decision.message)
+
+        running = self.observability.update_run(
             run.id,
             status="running",
             summary=self.start_summary,
         )
-        self.repository.add_event(
+        self.observability.add_event(
             run_id=run.id,
             tick_id=run.tick_id,
             type="run.started",
@@ -90,17 +123,17 @@ class TaskLifecycleRuntime:
         )
 
         try:
-            context = await self._prepare_context(running)
+            context = await self._prepare_context(running, task=task)
             report = await self.execute(context)
             await self._complete_task(context, report)
-            completed = self.repository.update_run(
+            completed = self.observability.update_run(
                 run.id,
                 status="completed",
                 summary=report.run_summary,
                 error=None,
                 finished=True,
             )
-            self.repository.add_event(
+            self.observability.add_event(
                 run_id=run.id,
                 tick_id=run.tick_id,
                 type="run.completed",
@@ -110,14 +143,14 @@ class TaskLifecycleRuntime:
             return RuntimeResult(run=completed)
         except Exception as exc:
             await self._try_add_failure_comment(run, str(exc))
-            failed = self.repository.update_run(
+            failed = self.observability.update_run(
                 run.id,
                 status="failed",
                 summary=self.failed_summary,
                 error=str(exc),
                 finished=True,
             )
-            self.repository.add_event(
+            self.observability.add_event(
                 run_id=run.id,
                 tick_id=run.tick_id,
                 type="run.failed",
@@ -130,14 +163,14 @@ class TaskLifecycleRuntime:
         if run.status not in RUN_CANCELABLE_STATUSES:
             raise ValueError(f"Run cannot be cancelled from status: {run.status}")
 
-        cancelled = self.repository.update_run(
+        cancelled = self.observability.update_run(
             run.id,
             status="cancelled",
             summary="Run отменен пользователем",
             error=None,
             finished=True,
         )
-        self.repository.add_event(
+        self.observability.add_event(
             run_id=run.id,
             tick_id=run.tick_id,
             type="run.cancelled",
@@ -149,9 +182,13 @@ class TaskLifecycleRuntime:
     async def execute(self, context: RuntimeExecutionContext) -> CompletionReport:
         raise NotImplementedError
 
-    async def _prepare_context(self, run: RunRecord) -> RuntimeExecutionContext:
-        task = await self.tracker.tasks_get(run.external_task_id)
-        self.repository.add_event(
+    async def _prepare_context(
+        self,
+        run: RunRecord,
+        *,
+        task: dict[str, Any],
+    ) -> RuntimeExecutionContext:
+        self.observability.add_event(
             run_id=run.id,
             tick_id=run.tick_id,
             type="task.loaded",
@@ -160,7 +197,7 @@ class TaskLifecycleRuntime:
         )
 
         workspace = self.workspace_manager.prepare_for_run(run)
-        self.repository.add_event(
+        self.observability.add_event(
             run_id=run.id,
             tick_id=run.tick_id,
             type="workspace.prepared",
@@ -168,21 +205,22 @@ class TaskLifecycleRuntime:
             payload={"workspace_root": str(workspace.root)},
         )
 
-        await self.tracker.tasks_update(run.external_task_id, {"status": "InProgress"})
-        self.repository.add_event(
-            run_id=run.id,
-            tick_id=run.tick_id,
-            type="task.status_changed",
-            message="Задача переведена в InProgress",
-            payload={"status": "InProgress"},
-        )
+        if str(task.get("status")) != "InProgress":
+            await self.tracker.tasks_update(run.external_task_id, {"status": "InProgress"})
+            self.observability.add_event(
+                run_id=run.id,
+                tick_id=run.tick_id,
+                type="task.status_changed",
+                message="Задача переведена в InProgress",
+                payload={"status": "InProgress"},
+            )
 
         await self.tracker.comments_add(
             task_id=run.external_task_id,
             author_email=self.agent_email,
             body=self.start_comment,
         )
-        self.repository.add_event(
+        self.observability.add_event(
             run_id=run.id,
             tick_id=run.tick_id,
             type="task.comment_added",
@@ -212,13 +250,13 @@ class TaskLifecycleRuntime:
             author_email=self.agent_email,
             body=report.final_comment,
         )
-        self.repository.add_event(
+        self.observability.add_event(
             run_id=context.run.id,
             tick_id=context.run.tick_id,
             type="task.comment_added",
             message="Добавлен итоговый комментарий runtime",
         )
-        self.repository.add_event(
+        self.observability.add_event(
             run_id=context.run.id,
             tick_id=context.run.tick_id,
             type="run.outcome",
@@ -234,7 +272,7 @@ class TaskLifecycleRuntime:
             context.run.external_task_id,
             {"status": report.task_status},
         )
-        self.repository.add_event(
+        self.observability.add_event(
             run_id=context.run.id,
             tick_id=context.run.tick_id,
             type="task.status_changed",
@@ -251,7 +289,7 @@ class TaskLifecycleRuntime:
         context: ToolContext,
         raise_on_error: bool = True,
     ) -> dict[str, Any]:
-        tool_call = self.repository.create_tool_call(
+        tool_call = self.observability.create_tool_call(
             run_id=run.id,
             tool_name=name,
             input=input,
@@ -259,12 +297,12 @@ class TaskLifecycleRuntime:
         try:
             result = self.tool_registry.run(name, input, context)
         except (ToolError, ValueError) as exc:
-            self.repository.complete_tool_call(
+            self.observability.complete_tool_call(
                 tool_call.id,
                 status="failed",
                 error=str(exc),
             )
-            self.repository.add_event(
+            self.observability.add_event(
                 run_id=run.id,
                 tick_id=run.tick_id,
                 type="tool.failed",
@@ -275,12 +313,12 @@ class TaskLifecycleRuntime:
                 raise
             return {"error": str(exc)}
 
-        self.repository.complete_tool_call(
+        self.observability.complete_tool_call(
             tool_call.id,
             status="completed",
             output=result.output,
         )
-        self.repository.add_event(
+        self.observability.add_event(
             run_id=run.id,
             tick_id=run.tick_id,
             type="tool.completed",
@@ -297,7 +335,7 @@ class TaskLifecycleRuntime:
                 body=f"Агент завершился с ошибкой: {error}",
             )
         except Exception:
-            self.repository.add_event(
+            self.observability.add_event(
                 run_id=run.id,
                 tick_id=run.tick_id,
                 type="task.comment_failed",
@@ -359,7 +397,7 @@ class LLMAgentRuntime(TaskLifecycleRuntime):
     def __init__(
         self,
         *,
-        repository: Repository,
+        observability: ObservabilitySink,
         tracker: TaskTrackerClient,
         agent_email: str,
         workspace_manager: WorkspaceManager,
@@ -371,7 +409,7 @@ class LLMAgentRuntime(TaskLifecycleRuntime):
         file_read_max_bytes: int,
     ) -> None:
         super().__init__(
-            repository=repository,
+            observability=observability,
             tracker=tracker,
             agent_email=agent_email,
             workspace_manager=workspace_manager,
@@ -419,7 +457,7 @@ class LLMAgentRuntime(TaskLifecycleRuntime):
         final_message: str | None = None
 
         for step in range(1, self.max_steps + 1):
-            self.repository.add_event(
+            self.observability.add_event(
                 run_id=run.id,
                 tick_id=run.tick_id,
                 type="llm.requested",
@@ -427,7 +465,7 @@ class LLMAgentRuntime(TaskLifecycleRuntime):
                 payload={"step": step, "tools": self.tool_registry.names},
             )
             response = await self.llm_client.complete(messages=messages, tools=tools)
-            self.repository.add_event(
+            self.observability.add_event(
                 run_id=run.id,
                 tick_id=run.tick_id,
                 type="llm.responded",
@@ -483,7 +521,7 @@ class LLMAgentRuntime(TaskLifecycleRuntime):
             )
 
         artifact = write_artifact(context.workspace, "final.diff", diff)
-        self.repository.add_event(
+        self.observability.add_event(
             run_id=context.run.id,
             tick_id=context.run.tick_id,
             type="artifact.created",
@@ -491,7 +529,7 @@ class LLMAgentRuntime(TaskLifecycleRuntime):
             payload={"path": artifact.path, "bytes": artifact.bytes},
         )
         checks_summary = _checks_summary(
-            self.repository.list_tool_calls_for_run(context.run.id)
+            self.observability.list_tool_calls_for_run(context.run.id)
         )
         return CompletionReport(
             outcome="code_change",

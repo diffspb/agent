@@ -18,7 +18,7 @@ from simple_agent.service.schemas import (
     run_to_response,
     tool_call_to_response,
 )
-from simple_agent.storage import Repository
+from simple_agent.storage import Repository, SqliteObservabilitySink
 from simple_agent.tools import build_default_tool_registry
 from simple_agent.tracker import TaskTrackerClient
 from simple_agent.workspace import WorkspaceManager
@@ -157,7 +157,7 @@ def _create_controller(
     workspace_manager = WorkspaceManager(root=settings.workspace_root)
     if settings.agent_runtime_mode == "llm":
         runtime = LLMAgentRuntime(
-            repository=repository,
+            observability=SqliteObservabilitySink(repository),
             tracker=tracker,
             agent_email=settings.agent_email,
             workspace_manager=workspace_manager,
@@ -176,7 +176,7 @@ def _create_controller(
         return AgentController(repository=repository, runtime=runtime)
     if settings.agent_runtime_mode == "llm_stub":
         runtime = LLMAgentRuntime(
-            repository=repository,
+            observability=SqliteObservabilitySink(repository),
             tracker=tracker,
             agent_email=settings.agent_email,
             workspace_manager=workspace_manager,
@@ -194,7 +194,7 @@ def _create_controller(
             detail=f"Unknown AGENT_RUNTIME_MODE: {settings.agent_runtime_mode}",
         )
     runtime = PrimitiveAgentRuntime(
-        repository=repository,
+        observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email=settings.agent_email,
         workspace_manager=workspace_manager,

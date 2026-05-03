@@ -8,7 +8,7 @@ from simple_agent.agent import TaskSelectionService
 from simple_agent.config import Settings
 from simple_agent.service.dependencies import get_repository, get_settings
 from simple_agent.service.schemas import task_selection_result_to_response
-from simple_agent.storage import Repository
+from simple_agent.storage import Repository, SqliteObservabilitySink
 from simple_agent.tracker import TaskTrackerClient
 
 
@@ -65,7 +65,7 @@ async def _run_tick(
     tracker_factory = request.app.state.task_tracker_factory
     tracker: TaskTrackerClient = tracker_factory()
     service = TaskSelectionService(
-        repository=repository,
+        observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email=settings.agent_email,
     )

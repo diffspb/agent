@@ -7,7 +7,7 @@ import pytest
 
 from simple_agent.agent import LLMAgentRuntime
 from simple_agent.llm import LLMResponse, LLMToolCall, StubLLMClient
-from simple_agent.storage import Repository, SqliteDatabase
+from simple_agent.storage import Repository, SqliteDatabase, SqliteObservabilitySink
 from simple_agent.tools import build_default_tool_registry
 from simple_agent.workspace import WorkspaceManager
 
@@ -241,7 +241,7 @@ def _runtime(
     max_steps: int = 4,
 ) -> LLMAgentRuntime:
     return LLMAgentRuntime(
-        repository=repository,
+        observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email="agent@example.com",
         workspace_manager=WorkspaceManager(root=tmp_path / "workspaces"),

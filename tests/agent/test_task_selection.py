@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from simple_agent.agent import TaskSelectionService
-from simple_agent.storage import Repository, SqliteDatabase
+from simple_agent.storage import Repository, SqliteDatabase, SqliteObservabilitySink
 
 
 @pytest.mark.anyio
@@ -21,7 +21,7 @@ async def test_task_selection_picks_highest_priority_open_unblocked_task(
         ]
     )
     service = TaskSelectionService(
-        repository=repository,
+        observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email="agent@example.com",
     )
@@ -54,7 +54,7 @@ async def test_task_selection_skips_task_blocked_by_active_dependency(
         ]
     )
     service = TaskSelectionService(
-        repository=repository,
+        observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email="agent@example.com",
     )
@@ -87,7 +87,7 @@ async def test_task_selection_ignores_cancelled_dependency(tmp_path: Path) -> No
         ]
     )
     service = TaskSelectionService(
-        repository=repository,
+        observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email="agent@example.com",
     )
@@ -111,7 +111,7 @@ async def test_task_selection_skips_unknown_dependency(tmp_path: Path) -> None:
         ]
     )
     service = TaskSelectionService(
-        repository=repository,
+        observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email="agent@example.com",
     )
@@ -123,22 +123,30 @@ async def test_task_selection_skips_unknown_dependency(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
-async def test_task_selection_does_not_create_duplicate_run_for_active_task(
+async def test_task_selection_records_reconciliation_and_creates_new_attempt_for_open_task(
     tmp_path: Path,
 ) -> None:
     repository = _repository(tmp_path)
     repository.create_run(external_task_id="PROJECT-1", status="running")
     tracker = FakeTracker([_task("PROJECT-1", priority="critical")])
     service = TaskSelectionService(
-        repository=repository,
+        observability=SqliteObservabilitySink(repository),
         tracker=tracker,
         agent_email="agent@example.com",
     )
 
     result = await service.run_tick(source="manual")
 
-    assert result.selected_run is None
-    assert result.candidates[0].reason == "already_running"
+    assert result.selected_run is not None
+    assert result.selected_run.external_task_id == "PROJECT-1"
+    assert result.candidates[0].reason == "selected_highest_priority"
+    assert result.candidates[0].metadata["local_active_run"]["status"] == "running"
+    reconciliation_events = [
+        event
+        for event in repository.list_events_for_tick(result.tick.id)
+        if event.type == "task.reconciliation_detected"
+    ]
+    assert len(reconciliation_events) == 1
 
 
 def _repository(tmp_path: Path) -> Repository:
