@@ -55,6 +55,22 @@ def test_run_command_accepts_shell_like_string(tmp_path: Path) -> None:
     assert result.output["stdout"].strip() == "ok"
 
 
+def test_run_command_executes_bash_constructs(tmp_path: Path) -> None:
+    registry = build_default_tool_registry()
+    context = _context(tmp_path)
+
+    result = registry.run(
+        "run_command",
+        {"command": "pwd && printf 'done' > marker.txt && cat marker.txt", "cwd": "."},
+        context,
+    )
+
+    assert result.output["returncode"] == 0
+    assert str(context.workspace.repo) in result.output["stdout"]
+    assert result.output["stdout"].strip().endswith("done")
+    assert (context.workspace.repo / "marker.txt").read_text(encoding="utf-8") == "done"
+
+
 def test_run_command_times_out(tmp_path: Path) -> None:
     registry = build_default_tool_registry()
     context = _context(tmp_path, timeout=0.01)
@@ -77,6 +93,10 @@ def test_all_default_tools_have_llm_metadata() -> None:
         function = tool["function"]
         assert function["description"]
         assert function["parameters"]["type"] == "object"
+
+    descriptions = {tool["function"]["name"]: tool["function"]["description"] for tool in tools}
+    assert "bash-команду" in descriptions["run_command"]
+    assert "bash-команду" in descriptions["run_tests"]
 
 
 def test_run_command_and_run_tests_schemas_accept_string_or_array() -> None:

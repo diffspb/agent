@@ -74,7 +74,7 @@ TOOL_SPECS = {
     ),
     "run_command": ToolSpec(
         name="run_command",
-        description="Запустить безопасную команду внутри рабочего пространства.",
+        description="Запустить bash-команду внутри рабочего пространства. Для строковой команды поддерживаются cd, &&, | и другие shell-конструкции; рабочую директорию можно также задавать через cwd.",
         input_schema={
             "type": "object",
             "properties": {
@@ -92,7 +92,7 @@ TOOL_SPECS = {
     ),
     "run_tests": ToolSpec(
         name="run_tests",
-        description="Запустить тестовую команду внутри рабочего пространства.",
+        description="Запустить тестовую bash-команду внутри рабочего пространства.",
         input_schema={
             "type": "object",
             "properties": {

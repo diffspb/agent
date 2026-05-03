@@ -24,8 +24,8 @@ class RunCommandTool:
     name = "run_command"
 
     def run(self, input: JsonObject, context: ToolContext) -> ToolResult:
-        command = _normalize_command(input.get("command"))
-        executable = command[0]
+        command = input.get("command")
+        executable = _command_executable(command)
         if executable in DENIED_COMMANDS:
             raise ToolError(f"Command is denied: {executable}")
 
@@ -38,7 +38,7 @@ class RunCommandTool:
 
         try:
             completed = subprocess.run(
-                command,
+                _subprocess_args(command),
                 cwd=cwd,
                 capture_output=True,
                 text=True,
@@ -67,18 +67,33 @@ class RunTestsTool:
     name = "run_tests"
 
     def run(self, input: JsonObject, context: ToolContext) -> ToolResult:
-        command = input.get("command", ["python", "-m", "pytest"])
+        command = input.get("command", "python -m pytest")
         return RunCommandTool().run({"command": command, "cwd": input.get("cwd", ".")}, context)
 
 
-def _normalize_command(value: object) -> list[str]:
+def _command_executable(value: object) -> str:
     if isinstance(value, str):
-        command = shlex.split(value)
-    else:
-        command = value
-    if not _is_string_list(command):
-        raise ToolError("command must be a non-empty list of strings or a shell-like command string")
-    return command
+        command = value.strip()
+        if not command:
+            raise ToolError("command must be a non-empty list of strings or a shell command string")
+        parts = shlex.split(command)
+        if not parts:
+            raise ToolError("command must be a non-empty list of strings or a shell command string")
+        return parts[0]
+    if _is_string_list(value):
+        return value[0]
+    raise ToolError("command must be a non-empty list of strings or a shell command string")
+
+
+def _subprocess_args(value: object) -> list[str]:
+    if isinstance(value, str):
+        command = value.strip()
+        if not command:
+            raise ToolError("command must be a non-empty list of strings or a shell command string")
+        return ["bash", "-lc", command]
+    if _is_string_list(value):
+        return value
+    raise ToolError("command must be a non-empty list of strings or a shell command string")
 
 
 def _is_string_list(value: object) -> bool:
